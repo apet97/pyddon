@@ -1,0 +1,91 @@
+{
+  "$schema": "https://developer.clockify.me/schemas/manifest.schema.json",
+  "schemaVersion": "1.3",
+  "key": "clockify-api-studio",
+  "name": "Clockify API Studio",
+  "description": "No-code API + webhook console for Clockify, backed by a Python service.",
+  "baseUrl": "https://YOUR-PYTHON-SERVER-DOMAIN/api-studio",
+  "minimalSubscriptionPlan": "STANDARD",
+  "icon": {
+    "type": "URL",
+    "url": "https://YOUR-PYTHON-SERVER-DOMAIN/assets/api-studio-icon.png"
+  },
+  "permissions": {
+    "scopes": [
+      "WORKSPACE_READ",
+      "WORKSPACE_SETTINGS_READ",
+      "TIME_ENTRY_READ",
+      "TIME_ENTRY_WRITE",
+      "PROJECT_READ",
+      "PROJECT_WRITE",
+      "CLIENT_READ",
+      "CLIENT_WRITE",
+      "TAG_READ",
+      "TAG_WRITE",
+      "USER_READ",
+      "CUSTOM_FIELDS_READ",
+      "CUSTOM_FIELDS_WRITE"
+    ]
+  },
+  "components": [
+    {
+      "type": "SIDEBAR",
+      "key": "api-studio-sidebar",
+      "name": "API Studio",
+      "url": "/ui",
+      "access": [
+        "ADMIN"
+      ]
+    }
+  ],
+  "webhooks": [
+    {
+      "key": "api-studio-webhooks",
+      "url": "/webhooks/clockify",
+      "eventTypes": [
+        "TIME_ENTRY_CREATED",
+        "TIME_ENTRY_UPDATED",
+        "TIME_ENTRY_DELETED",
+        "PROJECT_CREATED",
+        "PROJECT_UPDATED",
+        "PROJECT_DELETED",
+        "CLIENT_CREATED",
+        "CLIENT_UPDATED",
+        "CLIENT_DELETED",
+        "TAG_CREATED",
+        "TAG_UPDATED",
+        "TAG_DELETED"
+      ]
+    }
+  ],
+  "settings": {
+    "sections": [
+      {
+        "key": "general",
+        "name": "General",
+        "fields": [
+          {
+            "key": "bootstrap_on_install",
+            "name": "Run GET bootstrap on install",
+            "type": "BOOLEAN",
+            "default": true
+          },
+          {
+            "key": "include_heavy_endpoints",
+            "name": "Include heavy report endpoints in bootstrap",
+            "type": "BOOLEAN",
+            "default": false
+          },
+          {
+            "key": "bootstrap_max_rps",
+            "name": "Bootstrap max RPS",
+            "type": "NUMBER",
+            "default": 25,
+            "min": 1,
+            "max": 50
+          }
+        ]
+      }
+    ]
+  }
+}

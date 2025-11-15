@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clockify API Studio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Clockify API Studio</h1>
+            <p>No-code API explorer and console for your workspace</p>
+        </header>
+
+        <main>
+            <section class="card">
+                <h2>API Call Builder</h2>
+                <p class="hint">Pick an operation from the OpenAPI catalog or enter custom details.</p>
+
+                <form id="apiCallForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="workspaceId">Workspace ID *</label>
+                            <input type="text" id="workspaceId" name="workspaceId" placeholder="Enter workspace ID" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="operationSelect">Operation Catalog</label>
+                            <select id="operationSelect">
+                                <option value="">— Select from OpenAPI spec —</option>
+                            </select>
+                            <small>Lists every Clockify endpoint by tag and method.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="method">HTTP Method</label>
+                            <select id="method" name="method" required>
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="PATCH">PATCH</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="endpoint">Endpoint</label>
+                            <input type="text" id="endpoint" name="endpoint" placeholder="/v1/workspaces/{workspaceId}/projects" required>
+                            <small>Use {workspaceId} for workspace-scoped paths.</small>
+                        </div>
+                    </div>
+
+                    <div class="dynamic-sections">
+                        <div class="dynamic-block">
+                            <h3>Path Parameters</h3>
+                            <div id="pathParamsContainer" class="param-container"></div>
+                        </div>
+                        <div class="dynamic-block">
+                            <h3>Query Parameters</h3>
+                            <div id="queryParamsContainer" class="param-container"></div>
+                        </div>
+                        <div class="dynamic-block">
+                            <h3>Request Body</h3>
+                            <div id="bodyParamsContainer" class="param-container"></div>
+                            <textarea id="bodyOverride" rows="4" placeholder='Optional advanced JSON override'></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-group checkbox">
+                        <label>
+                            <input type="checkbox" id="developerMode" name="developerMode">
+                            Developer Mode (send via developer.clockify.me)
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn-primary">Execute API Call</button>
+                </form>
+            </section>
+
+            <section class="card" id="responseSection" style="display:none;">
+                <h2>Response</h2>
+                <div id="responseMetadata" class="metadata"></div>
+                <pre id="responseBody"><code></code></pre>
+            </section>
+
+            <section class="card">
+                <h2>Quick Actions</h2>
+                <div class="quick-actions">
+                    <button type="button" onclick="loadExample('listProjects')" class="btn-secondary">List Projects</button>
+                    <button type="button" onclick="loadExample('listUsers')" class="btn-secondary">List Users</button>
+                    <button type="button" onclick="loadExample('listTimeEntries')" class="btn-secondary">List Time Entries</button>
+                    <button type="button" onclick="loadExample('listClients')" class="btn-secondary">List Clients</button>
+                </div>
+            </section>
+
+            <section class="card info">
+                <h3>ℹ️ Tips</h3>
+                <ul>
+                    <li>Use the catalog dropdown to auto-fill method, path, and parameters.</li>
+                    <li>Workspace ID is synchronized into any `{workspaceId}` path field.</li>
+                    <li>The advanced JSON textarea overrides generated body inputs when provided.</li>
+                    <li>All requests send through the add-on backend with guardrails enforced.</li>
+                </ul>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const operationSelect = document.getElementById('operationSelect');
+        const methodSelect = document.getElementById('method');
+        const endpointInput = document.getElementById('endpoint');
+        const workspaceInput = document.getElementById('workspaceId');
+        const pathParamsContainer = document.getElementById('pathParamsContainer');
+        const queryParamsContainer = document.getElementById('queryParamsContainer');
+        const bodyParamsContainer = document.getElementById('bodyParamsContainer');
+        const bodyOverride = document.getElementById('bodyOverride');
+        const developerMode = document.getElementById('developerMode');
+        const responseSection = document.getElementById('responseSection');
+        const responseMetadata = document.getElementById('responseMetadata');
+        const responseBody = document.getElementById('responseBody').querySelector('code');
+
+        let operationsCatalog = [];
+
+        const quickExamples = {
+            listProjects: {
+                method: 'GET',
+                endpoint: '/v1/workspaces/{workspaceId}/projects'
+            },
+            listUsers: {
+                method: 'GET',
+                endpoint: '/v1/workspaces/{workspaceId}/users'
+            },
+            listTimeEntries: {
+                method: 'GET',
+                endpoint: '/v1/workspaces/{workspaceId}/user/{userId}/time-entries'
+            },
+            listClients: {
+                method: 'GET',
+                endpoint: '/v1/workspaces/{workspaceId}/clients'
+            }
+        };
+
+        async function loadOperationsCatalog() {
+            try {
+                const res = await fetch('/ui/api-explorer/endpoints');
+                const data = await res.json();
+                operationsCatalog = [];
+                data.groups.forEach(group => {
+                    group.endpoints.forEach(endpoint => {
+                        operationsCatalog.push({ ...endpoint, tag: group.tag });
+                    });
+                });
+                populateOperationSelect();
+            } catch (err) {
+                console.warn('Failed to load OpenAPI catalog', err);
+            }
+        }
+
+        function populateOperationSelect() {
+            operationSelect.innerHTML = '<option value="">— Select from OpenAPI spec —</option>';
+            operationsCatalog.forEach((op, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `[${op.tag || 'General'}] ${op.method} ${op.path}`;
+                operationSelect.appendChild(option);
+            });
+        }
+
+        operationSelect.addEventListener('change', () => {
+            const idx = operationSelect.value;
+            if (idx === '') {
+                clearDynamicSections();
+                return;
+            }
+            const op = operationsCatalog[idx];
+            methodSelect.value = op.method;
+            endpointInput.value = op.path;
+            renderParameterInputs(op);
+        });
+
+        workspaceInput.addEventListener('input', () => {
+            document.querySelectorAll('[data-param-name="workspaceId"]').forEach(input => {
+                input.value = workspaceInput.value;
+            });
+        });
+
+        function clearDynamicSections() {
+            pathParamsContainer.innerHTML = '<p class="empty">No parameters</p>';
+            queryParamsContainer.innerHTML = '<p class="empty">No parameters</p>';
+            bodyParamsContainer.innerHTML = '<p class="empty">No body schema for this operation</p>';
+            bodyOverride.value = '';
+        }
+
+        function renderParameterInputs(operation) {
+            const parameters = operation.parameters || [];
+            const pathParams = parameters.filter(p => p.in === 'path');
+            const queryParams = parameters.filter(p => p.in === 'query');
+            renderInputGroup(pathParams, pathParamsContainer, 'path');
+            renderInputGroup(queryParams, queryParamsContainer, 'query');
+            renderBodyInputs(operation.requestBody);
+        }
+
+        function renderInputGroup(params, container, scope) {
+            container.innerHTML = '';
+            if (!params.length) {
+                container.innerHTML = '<p class="empty">No parameters</p>';
+                return;
+            }
+            params.forEach(param => {
+                const row = document.createElement('div');
+                row.className = 'param-row';
+
+                const label = document.createElement('label');
+                label.textContent = `${param.name}${param.required ? ' *' : ''}`;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = param.description || '';
+                input.dataset.scope = scope;
+                input.dataset.paramName = param.name;
+                input.dataset.required = param.required ? 'true' : 'false';
+                if (param.schema && param.schema.type) {
+                    input.dataset.type = param.schema.type;
+                }
+                input.classList.add('param-input');
+
+                if (param.name === 'workspaceId' && workspaceInput.value) {
+                    input.value = workspaceInput.value;
+                }
+
+                row.appendChild(label);
+                row.appendChild(input);
+                container.appendChild(row);
+            });
+        }
+
+        function renderBodyInputs(requestBody) {
+            bodyParamsContainer.innerHTML = '';
+            const schema = requestBody?.content?.['application/json']?.schema;
+            if (!schema || !schema.properties) {
+                bodyParamsContainer.innerHTML = '<p class="empty">No structured body parameters</p>';
+                return;
+            }
+            Object.entries(schema.properties).forEach(([name, definition]) => {
+                const row = document.createElement('div');
+                row.className = 'param-row';
+                const label = document.createElement('label');
+                label.textContent = `${name}${schema.required?.includes(name) ? ' *' : ''}`;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = definition.description || '';
+                input.dataset.scope = 'body';
+                input.dataset.paramName = name;
+                input.dataset.type = definition.type || 'string';
+                input.classList.add('param-input');
+                row.append(label, input);
+                bodyParamsContainer.appendChild(row);
+            });
+        }
+
+        function coerceValue(value, type) {
+            if (type === 'integer' || type === 'number') {
+                const num = Number(value);
+                return Number.isNaN(num) ? value : num;
+            }
+            if (type === 'boolean') {
+                if (value.toLowerCase() === 'true') return true;
+                if (value.toLowerCase() === 'false') return false;
+            }
+            return value;
+        }
+
+        function collectValues(scope) {
+            const entries = {};
+            document.querySelectorAll(`.param-input[data-scope="${scope}"]`).forEach(input => {
+                if (input.value === '') return;
+                const type = input.dataset.type || 'string';
+                entries[input.dataset.paramName] = coerceValue(input.value, type);
+            });
+            return entries;
+        }
+
+        document.getElementById('apiCallForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const workspaceId = workspaceInput.value;
+            if (!workspaceId) {
+                alert('Workspace ID is required.');
+                return;
+            }
+
+            const pathParams = collectValues('path');
+            if (!pathParams.workspaceId) {
+                pathParams.workspaceId = workspaceId;
+            }
+            const queryParams = collectValues('query');
+            let body = null;
+            const bodyEntries = collectValues('body');
+            if (Object.keys(bodyEntries).length) {
+                body = bodyEntries;
+            }
+            if (bodyOverride.value.trim()) {
+                try {
+                    body = JSON.parse(bodyOverride.value);
+                } catch (err) {
+                    alert('Invalid JSON in request body override');
+                    return;
+                }
+            }
+
+            const requestPayload = {
+                method: methodSelect.value,
+                endpoint: endpointInput.value,
+                params: pathParams,
+                query: queryParams,
+                body,
+                developer_mode: developerMode.checked,
+                workspace_id: workspaceId
+            };
+
+            try {
+                const response = await fetch('/api-call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestPayload)
+                });
+                const result = await response.json();
+                displayResponse(result);
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        });
+
+        function displayResponse(result) {
+            responseSection.style.display = 'block';
+            const statusClass = result.success ? 'success' : 'error';
+            const statusText = result.success ? '✅ Success' : '❌ Error';
+            responseMetadata.innerHTML = `
+                <div class="status ${statusClass}">${statusText}</div>
+                <div>Status Code: ${result.status_code ?? 'N/A'}</div>
+                <div>Duration: ${result.duration_ms ?? 0} ms</div>
+                ${result.error_message ? `<div class="error-msg">Error: ${result.error_message}</div>` : ''}
+            `;
+            responseBody.textContent = JSON.stringify(result.response_body || result, null, 2);
+            responseSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function loadExample(key) {
+            const example = quickExamples[key];
+            if (!example) return;
+            methodSelect.value = example.method;
+            endpointInput.value = example.endpoint;
+            clearDynamicSections();
+        }
+
+        loadOperationsCatalog();
+
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('auth_token');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.workspaceId) {
+                    workspaceInput.value = payload.workspaceId;
+                }
+            }
+        } catch (err) {
+            console.warn('Could not parse auth token');
+        }
+    </script>
+</body>
+</html>

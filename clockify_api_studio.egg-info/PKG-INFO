@@ -1,0 +1,37 @@
+Metadata-Version: 2.4
+Name: clockify-api-studio
+Version: 0.1.0
+Summary: Python backend for Clockify API Studio add-on
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: pydantic-settings>=2.0.0
+Requires-Dist: SQLAlchemy[asyncio]>=2.0.0
+Requires-Dist: aiosqlite>=0.19.0
+Requires-Dist: alembic>=1.13.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: PyJWT>=2.8.0
+Requires-Dist: tenacity>=8.2.0
+Requires-Dist: jsonpath-ng>=1.6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+
+# Clockify API Studio – Python Add-on Backend
+
+This repository (or folder) is prepared for a **Python-based Clockify add-on** called
+**Clockify API Studio**.
+
+Clockify will call this service over HTTP using the manifest in `manifest.api-studio.json`.
+
+The goal is:
+- Receive Clockify webhooks and log them.
+- Bootstrap workspace context by calling safe GET endpoints from the Clockify API.
+- Provide a backend for a no-code API Explorer.
+- Provide a small rules/flow engine that maps webhooks → API calls.
+
+The detailed product spec is in `docs/clockify-api-studio-spec.md`.
+All Python code lives under the `api_studio/` package.

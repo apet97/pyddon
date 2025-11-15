@@ -1,0 +1,235 @@
+{
+  "$schema": "https://developer.clockify.me/schemas/manifest.schema.json",
+  "schemaVersion": "1.3",
+  "key": "universal-webhook-api",
+  "name": "Universal Webhook + API Studio",
+  "description": "Enterprise add-on that receives any webhook event and performs any Clockify API call via no-code console and flows. Includes automatic GET bootstrap, custom webhook ingress, and generic HTTP actions.",
+  "baseUrl": "https://YOUR-SERVER-DOMAIN/universal-webhook",
+  "minimalSubscriptionPlan": "ENTERPRISE",
+  "icon": {
+    "type": "URL",
+    "url": "https://YOUR-SERVER-DOMAIN/assets/universal-webhook-icon.png"
+  },
+  "permissions": {
+    "scopes": [
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE",
+      "WORKSPACE_SETTINGS_READ",
+      "WORKSPACE_SETTINGS_WRITE",
+      "TIME_ENTRY_READ",
+      "TIME_ENTRY_WRITE",
+      "PROJECT_READ",
+      "PROJECT_WRITE",
+      "CLIENT_READ",
+      "CLIENT_WRITE",
+      "TAG_READ",
+      "TAG_WRITE",
+      "TASK_READ",
+      "TASK_WRITE",
+      "USER_READ",
+      "USER_WRITE",
+      "GROUP_READ",
+      "GROUP_WRITE",
+      "CUSTOM_FIELDS_READ",
+      "CUSTOM_FIELDS_WRITE",
+      "EXPENSE_READ",
+      "EXPENSE_WRITE",
+      "INVOICE_READ",
+      "INVOICE_WRITE",
+      "APPROVAL_READ",
+      "APPROVAL_WRITE",
+      "SCHEDULING_READ",
+      "SCHEDULING_WRITE",
+      "REPORTS_READ",
+      "TIME_OFF_READ",
+      "TIME_OFF_WRITE"
+    ]
+  },
+  "components": [
+    {
+      "type": "SIDEBAR",
+      "key": "universal-webhook-sidebar",
+      "name": "Universal Webhook",
+      "url": "/ui",
+      "access": [
+        "ADMIN"
+      ]
+    }
+  ],
+  "webhooks": [
+    {
+      "key": "universal-webhook-all-events",
+      "url": "/webhooks/clockify",
+      "eventTypes": [
+        "APPROVAL_REQUEST_STATUS_UPDATED",
+        "ASSIGNMENT_CREATED",
+        "ASSIGNMENT_DELETED",
+        "ASSIGNMENT_PUBLISHED",
+        "ASSIGNMENT_UPDATED",
+        "BALANCE_UPDATED",
+        "BILLABLE_RATE_UPDATED",
+        "CLIENT_DELETED",
+        "CLIENT_UPDATED",
+        "COST_RATE_UPDATED",
+        "EXPENSE_CREATED",
+        "EXPENSE_DELETED",
+        "EXPENSE_RESTORED",
+        "EXPENSE_UPDATED",
+        "INVOICE_UPDATED",
+        "LIMITED_USERS_ADDED_TO_WORKSPACE",
+        "NEW_APPROVAL_REQUEST",
+        "NEW_CLIENT",
+        "NEW_INVOICE",
+        "NEW_PROJECT",
+        "NEW_TAG",
+        "NEW_TASK",
+        "NEW_TIMER_STARTED",
+        "NEW_TIME_ENTRY",
+        "PROJECT_DELETED",
+        "PROJECT_UPDATED",
+        "TAG_DELETED",
+        "TAG_UPDATED",
+        "TASK_DELETED",
+        "TASK_UPDATED",
+        "TIMER_STOPPED",
+        "TIME_ENTRY_BATCH_DELETED",
+        "TIME_ENTRY_DELETED",
+        "TIME_ENTRY_RESTORED",
+        "TIME_ENTRY_SPLIT",
+        "TIME_ENTRY_UPDATED",
+        "TIME_OFF_REQUESTED",
+        "TIME_OFF_REQUEST_APPROVED",
+        "TIME_OFF_REQUEST_REJECTED",
+        "TIME_OFF_REQUEST_WITHDRAWN",
+        "USERS_INVITED_TO_WORKSPACE",
+        "USER_ACTIVATED_ON_WORKSPACE",
+        "USER_DEACTIVATED_ON_WORKSPACE",
+        "USER_DELETED_FROM_WORKSPACE",
+        "USER_EMAIL_CHANGED",
+        "USER_GROUP_CREATED",
+        "USER_GROUP_DELETED",
+        "USER_GROUP_UPDATED",
+        "USER_JOINED_WORKSPACE",
+        "USER_UPDATED"
+      ]
+    }
+  ],
+  "lifecycle": [
+    {
+      "path": "/lifecycle/installed",
+      "type": "INSTALLED"
+    },
+    {
+      "path": "/lifecycle/uninstalled",
+      "type": "DELETED"
+    },
+    {
+      "path": "/lifecycle/settings-updated",
+      "type": "SETTINGS_UPDATED"
+    }
+  ],
+  "settings": {
+    "sections": [
+      {
+        "key": "bootstrap",
+        "name": "Bootstrap Settings",
+        "fields": [
+          {
+            "key": "run_on_install",
+            "name": "Run automatic GET bootstrap on install",
+            "type": "BOOLEAN",
+            "default": true
+          },
+          {
+            "key": "include_heavy_endpoints",
+            "name": "Include heavy report endpoints in bootstrap",
+            "type": "BOOLEAN",
+            "default": false
+          },
+          {
+            "key": "max_rps",
+            "name": "Bootstrap max requests per second",
+            "type": "NUMBER",
+            "default": 25,
+            "min": 1,
+            "max": 50
+          },
+          {
+            "key": "include_time_entries",
+            "name": "Include time entries in bootstrap",
+            "type": "BOOLEAN",
+            "default": false
+          },
+          {
+            "key": "time_entry_days_back",
+            "name": "Days of time entries to fetch (if enabled)",
+            "type": "NUMBER",
+            "default": 30,
+            "min": 1,
+            "max": 365
+          }
+        ]
+      },
+      {
+        "key": "webhooks",
+        "name": "Webhook Settings",
+        "fields": [
+          {
+            "key": "enable_custom_webhooks",
+            "name": "Enable custom external webhooks",
+            "type": "BOOLEAN",
+            "default": true
+          },
+          {
+            "key": "webhook_log_retention_days",
+            "name": "Webhook log retention (days)",
+            "type": "NUMBER",
+            "default": 90,
+            "min": 1,
+            "max": 365
+          }
+        ]
+      },
+      {
+        "key": "flows",
+        "name": "Flow Settings",
+        "fields": [
+          {
+            "key": "enable_flows",
+            "name": "Enable no-code flows",
+            "type": "BOOLEAN",
+            "default": true
+          },
+          {
+            "key": "enable_generic_http_actions",
+            "name": "Enable generic HTTP actions in flows",
+            "type": "BOOLEAN",
+            "default": false
+          },
+          {
+            "key": "flow_execution_retention_days",
+            "name": "Flow execution log retention (days)",
+            "type": "NUMBER",
+            "default": 90,
+            "min": 1,
+            "max": 365
+          }
+        ]
+      },
+      {
+        "key": "data",
+        "name": "Data Settings",
+        "fields": [
+          {
+            "key": "cache_ttl_days",
+            "name": "Entity cache TTL (days)",
+            "type": "NUMBER",
+            "default": 7,
+            "min": 1,
+            "max": 30
+          }
+        ]
+      }
+    ]
+  }
+}

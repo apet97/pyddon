@@ -1,0 +1,316 @@
+{
+  "schemaVersion": "1.3",
+  "key": "clockify-python-addon",
+  "name": "Clockify Python Addon Boilerplate",
+  "description": "Production-ready Clockify Add-on with full API integration, webhook handling, and no-code API explorer. Built with FastAPI and designed for marketplace deployment.",
+  "baseUrl": "http://localhost:8000",
+  "vendor": {
+    "name": "Your Company",
+    "url": "https://your-company.com",
+    "supportEmail": "support@your-company.com"
+  },
+  "links": {
+    "homepage": "https://your-company.com/clockify-addon",
+    "documentation": "https://your-company.com/clockify-addon/docs",
+    "support": "https://your-company.com/support",
+    "privacyPolicy": "https://your-company.com/privacy",
+    "termsOfService": "https://your-company.com/terms"
+  },
+  "lifecycle": {
+    "installed": "http://localhost:8000/lifecycle/installed",
+    "settingsUpdated": "http://localhost:8000/lifecycle/settings-updated",
+    "statusChanged": "http://localhost:8000/lifecycle/status-changed",
+    "deleted": "http://localhost:8000/lifecycle/deleted"
+  },
+    "permissions": {
+        "scopes": [
+            "APPROVAL_READ",
+            "APPROVAL_WRITE",
+            "CLIENT_READ",
+            "CLIENT_WRITE",
+            "CUSTOM_FIELDS_READ",
+            "CUSTOM_FIELDS_WRITE",
+            "EXPENSE_READ",
+            "EXPENSE_WRITE",
+            "GROUP_READ",
+            "GROUP_WRITE",
+            "INVOICE_READ",
+            "INVOICE_WRITE",
+            "PROJECT_READ",
+            "PROJECT_WRITE",
+            "REPORTS_READ",
+            "REPORTS_WRITE",
+            "SCHEDULING_READ",
+            "SCHEDULING_WRITE",
+            "TAG_READ",
+            "TAG_WRITE",
+            "TASK_READ",
+            "TASK_WRITE",
+            "TIME_ENTRY_READ",
+            "TIME_ENTRY_WRITE",
+            "TIME_OFF_READ",
+            "TIME_OFF_WRITE",
+            "USER_READ",
+            "USER_WRITE",
+            "WORKSPACE_READ",
+            "WORKSPACE_WRITE",
+            "WORKSPACE_SETTINGS_READ",
+            "WORKSPACE_SETTINGS_WRITE"
+        ]
+    },
+  "webhooks": [
+    {
+      "event": "NEW_TIME_ENTRY",
+      "url": "http://localhost:8000/webhooks/time/new"
+    },
+    {
+      "event": "TIME_ENTRY_UPDATED",
+      "url": "http://localhost:8000/webhooks/time/updated"
+    },
+    {
+      "event": "TIME_ENTRY_DELETED",
+      "url": "http://localhost:8000/webhooks/time/deleted"
+    },
+    {
+      "event": "TIME_ENTRY_RESTORED",
+      "url": "http://localhost:8000/webhooks/time"
+    },
+    {
+      "event": "TIME_ENTRY_SPLIT",
+      "url": "http://localhost:8000/webhooks/time"
+    },
+    {
+      "event": "TIME_ENTRY_BATCH_DELETED",
+      "url": "http://localhost:8000/webhooks/time"
+    },
+    {
+      "event": "NEW_TIMER_STARTED",
+      "url": "http://localhost:8000/webhooks/time"
+    },
+    {
+      "event": "TIMER_STOPPED",
+      "url": "http://localhost:8000/webhooks/time"
+    },
+    {
+      "event": "NEW_PROJECT",
+      "url": "http://localhost:8000/webhooks/project/new"
+    },
+    {
+      "event": "PROJECT_UPDATED",
+      "url": "http://localhost:8000/webhooks/project/updated"
+    },
+    {
+      "event": "PROJECT_DELETED",
+      "url": "http://localhost:8000/webhooks/project/deleted"
+    },
+    {
+      "event": "USER_UPDATED",
+      "url": "http://localhost:8000/webhooks/user/updated"
+    },
+    {
+      "event": "USER_ACTIVATED_ON_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/user"
+    },
+    {
+      "event": "USER_DEACTIVATED_ON_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/user"
+    },
+    {
+      "event": "USER_DELETED_FROM_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/user"
+    },
+    {
+      "event": "USER_JOINED_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/user"
+    },
+    {
+      "event": "USER_EMAIL_CHANGED",
+      "url": "http://localhost:8000/webhooks/user"
+    },
+    {
+      "event": "EXPENSE_CREATED",
+      "url": "http://localhost:8000/webhooks/expense/created"
+    },
+    {
+      "event": "EXPENSE_UPDATED",
+      "url": "http://localhost:8000/webhooks/expense/updated"
+    },
+    {
+      "event": "EXPENSE_DELETED",
+      "url": "http://localhost:8000/webhooks/expense/deleted"
+    },
+    {
+      "event": "EXPENSE_RESTORED",
+      "url": "http://localhost:8000/webhooks/expense"
+    },
+    {
+      "event": "NEW_CLIENT",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "CLIENT_UPDATED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "CLIENT_DELETED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "NEW_TAG",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "TAG_UPDATED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "TAG_DELETED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "NEW_TASK",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "TASK_UPDATED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "TASK_DELETED",
+      "url": "http://localhost:8000/webhooks/generic"
+    },
+    {
+      "event": "ASSIGNMENT_CREATED",
+      "url": "http://localhost:8000/webhooks/assignment/created"
+    },
+    {
+      "event": "ASSIGNMENT_UPDATED",
+      "url": "http://localhost:8000/webhooks/assignment/updated"
+    },
+    {
+      "event": "ASSIGNMENT_DELETED",
+      "url": "http://localhost:8000/webhooks/assignment/deleted"
+    },
+    {
+      "event": "ASSIGNMENT_PUBLISHED",
+      "url": "http://localhost:8000/webhooks/assignment"
+    },
+    {
+      "event": "APPROVAL_REQUEST_STATUS_UPDATED",
+      "url": "http://localhost:8000/webhooks/approval/status-updated"
+    },
+    {
+      "event": "NEW_APPROVAL_REQUEST",
+      "url": "http://localhost:8000/webhooks/approval"
+    },
+    {
+      "event": "BALANCE_UPDATED",
+      "url": "http://localhost:8000/webhooks/balance"
+    },
+    {
+      "event": "BILLABLE_RATE_UPDATED",
+      "url": "http://localhost:8000/webhooks/rate"
+    },
+    {
+      "event": "COST_RATE_UPDATED",
+      "url": "http://localhost:8000/webhooks/rate"
+    },
+    {
+      "event": "INVOICE_UPDATED",
+      "url": "http://localhost:8000/webhooks/invoice"
+    },
+    {
+      "event": "NEW_INVOICE",
+      "url": "http://localhost:8000/webhooks/invoice"
+    },
+    {
+      "event": "LIMITED_USERS_ADDED_TO_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/workspace"
+    },
+    {
+      "event": "USERS_INVITED_TO_WORKSPACE",
+      "url": "http://localhost:8000/webhooks/workspace"
+    },
+    {
+      "event": "USER_GROUP_CREATED",
+      "url": "http://localhost:8000/webhooks/user-group"
+    },
+    {
+      "event": "USER_GROUP_UPDATED",
+      "url": "http://localhost:8000/webhooks/user-group"
+    },
+    {
+      "event": "USER_GROUP_DELETED",
+      "url": "http://localhost:8000/webhooks/user-group"
+    },
+    {
+      "event": "TIME_OFF_REQUESTED",
+      "url": "http://localhost:8000/webhooks/timeoff"
+    },
+    {
+      "event": "TIME_OFF_REQUEST_APPROVED",
+      "url": "http://localhost:8000/webhooks/timeoff"
+    },
+    {
+      "event": "TIME_OFF_REQUEST_REJECTED",
+      "url": "http://localhost:8000/webhooks/timeoff"
+    },
+    {
+      "event": "TIME_OFF_REQUEST_WITHDRAWN",
+      "url": "http://localhost:8000/webhooks/timeoff"
+    }
+  ],
+  "components": [
+    {
+      "type": "SIDEBAR",
+      "name": "API Studio",
+      "url": "http://localhost:8000/ui",
+      "icon": {
+        "light": "http://localhost:8000/static/icon.svg",
+        "dark": "http://localhost:8000/static/icon.svg"
+      }
+    }
+  ],
+  "settings": {
+    "type": "STRUCTURED",
+    "fields": [
+      {
+        "key": "developer_mode",
+        "name": "Developer Mode",
+        "description": "Use developer API endpoints instead of production",
+        "type": "BOOLEAN",
+        "defaultValue": false,
+        "required": false
+      },
+      {
+        "key": "forwarding_url",
+        "name": "Forwarding URL",
+        "description": "Forward webhook events to this URL (optional)",
+        "type": "STRING",
+        "required": false
+      },
+      {
+        "key": "auto_bootstrap",
+        "name": "Auto Bootstrap",
+        "description": "Automatically fetch workspace data on install",
+        "type": "BOOLEAN",
+        "defaultValue": true,
+        "required": false
+      },
+      {
+        "key": "logging_level",
+        "name": "Logging Level",
+        "description": "Set logging verbosity",
+        "type": "SELECT",
+        "options": [
+          {"label": "DEBUG", "value": "DEBUG"},
+          {"label": "INFO", "value": "INFO"},
+          {"label": "WARNING", "value": "WARNING"},
+          {"label": "ERROR", "value": "ERROR"}
+        ],
+        "defaultValue": "INFO",
+        "required": false
+      }
+    ]
+  }
+}
