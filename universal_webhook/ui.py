@@ -478,7 +478,7 @@ async def _run_bootstrap_background(
             )
         except Exception as exc:
             logger.error(
-                "bootstrap_background_failed",
-                workspace_id=workspace_id,
-                error=str(exc),
+                "Background bootstrap failed for workspace %s: %s",
+                workspace_id,
+                exc,
             )

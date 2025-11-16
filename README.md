@@ -50,6 +50,8 @@ This repository contains two Clockify add-ons plus shared infrastructure:
   - Advanced no-code flows (with optional generic HTTP actions)
   - Comprehensive settings (14 fields across 4 sections)
   - Production-ready observability
+  - Canonical manifest alignment via `clockify-python-addon/app/constants.py` ensuring every supported event/path and the full `CLOCKIFY_SCOPE_LIST` stay in sync between router, generated manifest, and `manifest.json`
+  - Hardened security (workspace isolation, RS256 + JWKS verification, allowed domain enforcement, payload size limits, and per-workspace token-bucket rate limiting)
 
 ---
 
@@ -227,12 +229,21 @@ UNIVERSAL_WEBHOOK_PORT=8001
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
 UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES=false
+UW_BOOTSTRAP_MAX_PAGES=200  # configurable page cap for bootstrap pagination
 UW_ENABLE_CUSTOM_WEBHOOKS=true
 UW_ENABLE_FLOWS=true
 UW_ENABLE_GENERIC_HTTP_ACTIONS=false
 UW_WEBHOOK_LOG_RETENTION_DAYS=90
 LOG_LEVEL=INFO
 ```
+
+Bootstrap pagination respects `UW_BOOTSTRAP_MAX_PAGES` (default `200`). When the cap is reached, the service logs a warning with workspace + operation context and records the truncation in `BootstrapState.last_error` so the UI dashboard surfaces the partial result. Set the env var higher if you need deeper historical fetches; lower it to keep bootstrap windows bounded in large workspaces.
+
+### Observability & Telemetry
+
+- Structured logging flows through Python's `logging` module (API Studio, Universal Webhook) and `structlog` (Clockify Marketplace add-on) so every request includes workspace IDs, job IDs, and sanitized payload context without leaking secrets.
+- Prometheus-compatible metrics live under `/metrics` with bootstrap, webhook, lifecycle, and flow counters/gauges shared in `clockify_core.metrics`.
+- Both add-ons share the same expectations: workspace-aware logging, redaction utilities, and consistent metric names/label cardinality to make log aggregation and alerting straightforward.
 
 ### Manifest Settings
 

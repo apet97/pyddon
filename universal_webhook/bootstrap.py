@@ -54,7 +54,8 @@ async def run_bootstrap_for_workspace(
     max_rps = settings.bootstrap_max_rps
     rate_limiter = RateLimiter(max_rps)
 
-    errors = []
+    errors: list[str] = []
+    truncated_operations: list[str] = []
     progress = 0
 
     try:
@@ -65,7 +66,7 @@ async def run_bootstrap_for_workspace(
         # Fetch core endpoints
         for op in core_ops:
             try:
-                await _fetch_and_store_operation(
+                truncated = await _fetch_and_store_operation(
                     session=session,
                     workspace_id=workspace_id,
                     client=client,
@@ -73,6 +74,8 @@ async def run_bootstrap_for_workspace(
                     rate_limiter=rate_limiter,
                     workspace_context={}
                 )
+                if truncated:
+                    truncated_operations.append(op.get("operation_id", op.get("path")))
                 progress += 1
                 bootstrap_state.progress = progress
                 await session.commit()
@@ -80,16 +83,16 @@ async def run_bootstrap_for_workspace(
                 error_msg = f"Error fetching {op['path']}: {str(e)}"
                 errors.append(error_msg)
                 logger.error(
-                    "bootstrap_core_operation_failed",
-                    workspace_id=workspace_id,
-                    path=op.get("path"),
-                    error=str(e),
+                    "Bootstrap core operation %s failed for workspace %s: %s",
+                    op.get("operation_id", op.get("path")),
+                    workspace_id,
+                    e,
                 )
 
         # Fetch workspace-scoped endpoints
         for op in workspace_ops:
             try:
-                await _fetch_and_store_operation(
+                truncated = await _fetch_and_store_operation(
                     session=session,
                     workspace_id=workspace_id,
                     client=client,
@@ -97,6 +100,8 @@ async def run_bootstrap_for_workspace(
                     rate_limiter=rate_limiter,
                     workspace_context={"workspaceId": workspace_id}
                 )
+                if truncated:
+                    truncated_operations.append(op.get("operation_id", op.get("path")))
                 progress += 1
                 bootstrap_state.progress = progress
                 await session.commit()
@@ -104,30 +109,48 @@ async def run_bootstrap_for_workspace(
                 error_msg = f"Error fetching {op['path']}: {str(e)}"
                 errors.append(error_msg)
                 logger.error(
-                    "bootstrap_workspace_operation_failed",
-                    workspace_id=workspace_id,
-                    path=op.get("path"),
-                    error=str(e),
+                    "Bootstrap workspace operation %s failed for workspace %s: %s",
+                    op.get("operation_id", op.get("path")),
+                    workspace_id,
+                    e,
                 )
 
         # Mark as complete
-        bootstrap_state.status = "COMPLETE" if not errors else "COMPLETE_WITH_ERRORS"
+        status_messages: list[str] = []
         if errors:
-            bootstrap_state.last_error = "; ".join(errors[:5])
+            bootstrap_state.status = "COMPLETE_WITH_ERRORS"
+            status_messages.append("; ".join(errors[:5]))
             logger.warning(
-                "bootstrap_completed_with_errors",
-                workspace_id=workspace_id,
-                error_count=len(errors),
+                "Bootstrap for workspace %s completed with %s errors",
+                workspace_id,
+                len(errors),
             )
+        elif truncated_operations:
+            bootstrap_state.status = "COMPLETE_WITH_WARNINGS"
         else:
-            bootstrap_state.last_error = None
+            bootstrap_state.status = "COMPLETE"
+
+        if truncated_operations:
+            warning_msg = (
+                f"Bootstrap truncated due to max page cap ({settings.bootstrap_max_pages}) "
+                f"for operations: {', '.join(truncated_operations[:5])}"
+            )
+            status_messages.append(warning_msg)
+            logger.warning(
+                "Bootstrap for workspace %s hit the page cap (%s) on %s operations",
+                workspace_id,
+                settings.bootstrap_max_pages,
+                len(truncated_operations),
+            )
+
+        bootstrap_state.last_error = "; ".join(status_messages) if status_messages else None
         await session.commit()
 
     except Exception as e:
         bootstrap_state.status = "FAILED"
         bootstrap_state.last_error = str(e)
         await session.commit()
-        logger.exception("bootstrap_failed", workspace_id=workspace_id)
+        logger.exception("Bootstrap failed for workspace %s", workspace_id)
         raise
 
 
@@ -138,7 +161,7 @@ async def _fetch_and_store_operation(
     operation: Dict[str, Any],
     rate_limiter: RateLimiter,
     workspace_context: Dict[str, str]
-) -> None:
+) -> bool:
     """Fetch a single operation and store results in entity cache."""
     path_template = operation["path"]
     actual_path = path_template
@@ -150,6 +173,7 @@ async def _fetch_and_store_operation(
     page_size = 50
     total_items = 0
     max_pages = max(1, settings.bootstrap_max_pages)
+    hit_page_cap = False
 
     while True:
         await rate_limiter.acquire()
@@ -161,10 +185,10 @@ async def _fetch_and_store_operation(
             data = resp.json()
         except Exception as exc:
             logger.warning(
-                "bootstrap_json_parse_failed",
-                path=actual_path,
-                page=page,
-                error=str(exc),
+                "Failed to parse bootstrap JSON for %s page %s: %s",
+                actual_path,
+                page,
+                exc,
             )
             break
 
@@ -195,12 +219,21 @@ async def _fetch_and_store_operation(
 
         page += 1
         if page > max_pages:
+            hit_page_cap = True
             logger.warning(
-                "bootstrap_page_limit_reached",
-                path=actual_path,
-                max_pages=max_pages,
+                (
+                    "Bootstrap hit page cap for workspace %s on %s (path=%s) "
+                    "after %s pages (max=%s)"
+                ),
+                workspace_id,
+                operation.get("operation_id", "unknown"),
+                actual_path,
+                max_pages,
+                max_pages,
             )
             break
 
     if total_items:
         await session.commit()
+
+    return hit_page_cap

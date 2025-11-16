@@ -21,6 +21,15 @@ Production-ready Clockify Add-on implementation in Python 3.11+ with FastAPI, fe
 - ✅ **Comprehensive Tests**: Unit tests for all major components
 - ✅ **Workspace Isolation**: All queries enforce workspace boundaries
 
+> 📌 **Canonical coverage** – `app/constants.py` defines `CLOCKIFY_WEBHOOK_EVENTS`, `CLOCKIFY_WEBHOOK_ROUTE_MAP`, `CLOCKIFY_WEBHOOK_EVENTS_BY_PATH`, and `CLOCKIFY_SCOPE_LIST`. The manifest generator, router, and JSON manifest all load from those canonical lists and tests (`tests/test_manifest.py`) make sure every Clockify webhook path + read/write scope stays in lockstep.
+
+### Security & Guardrails
+
+- RS256 + JWKS validation (with strict `iss`, `sub`, and `workspaceId` claims) plus a developer bypass toggle for local testing.
+- Allowed-domain enforcement for outbound API calls via `Settings.allowed_api_domains`.
+- Per-workspace token-bucket rate limiter (50 RPS) and configurable webhook/API payload size caps block runaway jobs.
+- Pervasive workspace isolation (DB queries, cache keys, bootstrap jobs) so data never crosses tenants.
+
 ## Quick Start
 
 ### Prerequisites

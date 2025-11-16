@@ -199,9 +199,9 @@ async def _run_flow_evaluation(
         webhook = await background_session.get(WebhookLog, webhook_id)
         if not webhook:
             logger.warning(
-                "webhook_not_found_for_flow_evaluation",
-                workspace_id=workspace_id,
-                webhook_id=webhook_id,
+                "Webhook %s not found for flow evaluation in workspace %s",
+                webhook_id,
+                workspace_id,
             )
             return
         try:
@@ -213,8 +213,8 @@ async def _run_flow_evaluation(
             )
         except Exception as exc:
             logger.error(
-                "flow_evaluation_failed",
-                workspace_id=workspace_id,
-                webhook_id=webhook_id,
-                error=str(exc),
+                "Flow evaluation failed for webhook %s in workspace %s: %s",
+                webhook_id,
+                workspace_id,
+                exc,
             )

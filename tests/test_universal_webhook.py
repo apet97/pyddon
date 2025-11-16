@@ -1,10 +1,13 @@
 """Tests for Universal Webhook add-on."""
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from universal_webhook.config import Settings
 from universal_webhook.db import get_db
 from universal_webhook.main import create_app
 from universal_webhook.models import (
@@ -313,6 +316,20 @@ def test_custom_webhook_missing_header(client):
     assert response.status_code == 400
 
 
+def test_settings_default_bootstrap_page_cap(monkeypatch):
+    """Settings should default to the canonical bootstrap page cap."""
+    monkeypatch.delenv("UW_BOOTSTRAP_MAX_PAGES", raising=False)
+    cfg = Settings()
+    assert cfg.bootstrap_max_pages == 200
+
+
+def test_settings_bootstrap_page_cap_env_override(monkeypatch):
+    """Environment variable should override the bootstrap page cap."""
+    monkeypatch.setenv("UW_BOOTSTRAP_MAX_PAGES", "5")
+    cfg = Settings()
+    assert cfg.bootstrap_max_pages == 5
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_fetches_all_pages():
     """Ensure bootstrap helper paginates and stores every page."""
@@ -362,7 +379,7 @@ async def test_bootstrap_fetches_all_pages():
     }
 
     async with test_session_maker() as session:
-        await _fetch_and_store_operation(
+        truncated = await _fetch_and_store_operation(
             session=session,
             workspace_id="ws-bootstrap",
             client=DummyClient(pages),
@@ -380,3 +397,130 @@ async def test_bootstrap_fetches_all_pages():
     expected_ids = {item["id"] for item in (first_page + second_page)}
     assert len(records) == len(expected_ids)
     assert {record.payload["id"] for record in records} == expected_ids
+    assert truncated is False
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_honors_page_cap(monkeypatch, caplog):
+    """Bootstrap fetching should respect the configured max page count."""
+    from universal_webhook.bootstrap import _fetch_and_store_operation, settings
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
+    test_session_maker = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    class DummyResponse:
+        def __init__(self, data):
+            self._data = data
+
+        def json(self):
+            return self._data
+
+        def raise_for_status(self):
+            return None
+
+    class DummyClient:
+        def __init__(self, pages):
+            self.pages = pages
+
+        async def get(self, path, params=None):
+            page = params.get("page", 1)
+            return DummyResponse(self.pages.get(page, []))
+
+    class NoopLimiter:
+        async def acquire(self):
+            return None
+
+    first_page = [{"id": f"p{i}"} for i in range(50)]
+    second_page = [{"id": f"s{i}"} for i in range(50)]
+    third_page = [{"id": "truncated"}]
+    pages = {1: first_page, 2: second_page, 3: third_page}
+    operation = {
+        "path": "/v1/workspaces/{workspaceId}/projects",
+        "operation_id": "listProjects",
+        "tags": ["PROJECTS"],
+    }
+
+    monkeypatch.setattr(settings, "bootstrap_max_pages", 2)
+
+    async with test_session_maker() as session:
+        with caplog.at_level(logging.WARNING):
+            truncated = await _fetch_and_store_operation(
+                session=session,
+                workspace_id="ws-bootstrap",
+                client=DummyClient(pages),
+                operation=operation,
+                rate_limiter=NoopLimiter(),
+                workspace_context={"workspaceId": "ws-bootstrap"},
+            )
+        result = await session.execute(
+            select(EntityCache).where(EntityCache.workspace_id == "ws-bootstrap")
+        )
+        records = result.scalars().all()
+
+    await engine.dispose()
+
+    assert truncated is True
+    assert len(records) == len(first_page) + len(second_page)
+    assert "Bootstrap hit page cap" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_run_bootstrap_marks_state_when_truncated(monkeypatch):
+    """Bootstrap state should track truncation when the page cap is hit."""
+    from universal_webhook.bootstrap import run_bootstrap_for_workspace
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
+    test_session_maker = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async def fake_fetch(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(
+        "universal_webhook.bootstrap._fetch_and_store_operation",
+        fake_fetch,
+    )
+    monkeypatch.setattr(
+        "universal_webhook.bootstrap.list_safe_get_operations",
+        lambda: [
+            {
+                "path": "/v1/workspaces/{workspaceId}/projects",
+                "operation_id": "listProjects",
+                "tags": ["PROJECTS"],
+                "is_core": False,
+            }
+        ],
+    )
+
+    async with test_session_maker() as session:
+        await run_bootstrap_for_workspace(
+            session=session,
+            workspace_id="ws-truncated",
+            client=None,
+        )
+        result = await session.execute(
+            select(BootstrapState).where(
+                BootstrapState.workspace_id == "ws-truncated"
+            )
+        )
+        state = result.scalar_one()
+
+    await engine.dispose()
+
+    assert state.status == "COMPLETE_WITH_WARNINGS"
+    assert "page cap" in (state.last_error or "").lower()
