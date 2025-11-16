@@ -44,6 +44,8 @@ pytest tests/ --cov=app --cov-report=html
 # Security (REQUIRED in production)
 REQUIRE_SIGNATURE_VERIFICATION=true
 CLOCKIFY_JWKS_URL=https://developer.clockify.me/.well-known/jwks.json
+# Optional HMAC fallback secret (leave blank to disable)
+WEBHOOK_HMAC_SECRET=
 
 # Server
 BASE_URL=https://your-addon.com
@@ -75,6 +77,24 @@ PYTHONPATH=. pytest tests/ --cov=app --cov-report=html
 # Open htmlcov/index.html
 ```
 
+## DEV_SETUP & TESTING
+
+- **Root workflow**  
+  ```bash
+  cd clockify-api-studio-py-kit
+  python3.11 -m venv venv
+  source venv/bin/activate
+  pip install -e .
+  ./venv/bin/python -m pytest tests -v
+  ```
+- **Run tests from `clockify-python-addon/`**  
+  ```bash
+  cd clockify-python-addon
+  ../venv/bin/python -m pip install -r requirements.txt
+  ../venv/bin/python -m pytest tests -v
+  ```
+  Reusing the repo-level `../venv` keeps add-on-only dependencies (e.g., `structlog`, `python-jose`) installed without juggling multiple environments.
+
 ## 🔒 Security Features
 
 ✅ **RS256 JWT Verification** - Full JWKS-based verification  
@@ -83,6 +103,7 @@ PYTHONPATH=. pytest tests/ --cov=app --cov-report=html
 ✅ **Rate Limiting** - 50 RPS per workspace (configurable)  
 ✅ **Deduplication** - DB-backed, survives restarts  
 ✅ **No Token Leakage** - Tokens never logged  
+✅ **Signature Metrics** - `/metrics` exports signature-failure and HMAC fallback counters for alerting
 
 ## 🎯 Key Endpoints
 

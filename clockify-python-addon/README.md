@@ -28,6 +28,7 @@ Production-ready Clockify Add-on implementation in Python 3.11+ with FastAPI, fe
 - RS256 + JWKS validation (with strict `iss`, `sub`, and `workspaceId` claims). `REQUIRE_SIGNATURE_VERIFICATION` defaults to `true` and **must remain enabled** in production/staging; flip it to `false` only for local development or automated tests when you cannot generate real Clockify signatures.
 - Allowed-domain enforcement for outbound API calls via `CLOCKIFY_ALLOWED_API_DOMAINS` (comma-separated hosts, e.g. `*.clockify.me,api.clockify.com`).
 - Per-workspace token-bucket rate limiter (50 RPS) and configurable webhook/API payload size caps block runaway jobs.
+- `/metrics` exposes counters for signature verification failures and HMAC fallback usage so operators can alert on suspicious traffic.
 - Pervasive workspace isolation (DB queries, cache keys, bootstrap jobs) so data never crosses tenants.
 
 ## Quick Start
@@ -68,6 +69,31 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=html
 ```
+
+## DEV_SETUP & TESTING
+
+Use the repo-level virtualenv (`clockify-api-studio-py-kit/venv`) so API Studio and the add-on run the same dependency set. This prevents missing packages (`structlog`, `python-jose`, etc.) when you hop between services.
+
+**Root workflow (recommended)**
+
+```bash
+cd clockify-api-studio-py-kit
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -e .
+./venv/bin/python -m pytest tests -v
+```
+
+**Running tests from `clockify-python-addon/`**
+
+```bash
+cd clockify-python-addon
+# Reuse the repo-level venv and add addon-only deps
+../venv/bin/python -m pip install -r requirements.txt
+../venv/bin/python -m pytest tests -v
+```
+
+> Tip: you do not need a second virtualenv inside `clockify-python-addon/`. Reusing `../venv` keeps tooling consistent; just install the add-on's requirements into that same environment before invoking pytest from the subdirectory.
 
 ### Accessing the UI
 

@@ -22,12 +22,13 @@
 ### JWT / Signature Verification
 - `app/token_verification.py` performs RS256 + JWKS validation, checking `iss == "clockify"`, `sub == addon_key`, `type == "addon"`, and ensuring `workspaceId`/`addonId` match expectations.
 - Both lifecycle and webhook routers require the canonical `Clockify-Signature` header (legacy headers accepted with warnings) and reject mismatched claims.
+- When `WEBHOOK_HMAC_SECRET` is set the verifier automatically falls back to computing an HMAC-SHA256 digest when Clockify delivers shared-secret signatures, and the `/metrics` endpoint tracks both signature failures and HMAC fallback usage per scope so operators can alert on suspicious traffic.
 
 ## 📊 Observability & Limits
 
 ### Metrics
 - `GET /metrics` exposes Prometheus text format counters implemented in `app/metrics.py`.
-- Tracked metrics include API Studio calls (success/failure), lifecycle callbacks, webhook receipts by event type, and bootstrap job outcomes.
+- Tracked metrics include API Studio calls (success/failure), lifecycle callbacks, webhook receipts by event type, signature verification failures, HMAC fallback usage, and bootstrap job outcomes.
 
 ### Health Monitoring
 - `GET /health` returns a lightweight liveness payload with version + timestamp.
