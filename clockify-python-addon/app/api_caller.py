@@ -207,14 +207,18 @@ class ClockifyAPIExecutor:
         hostname = (parsed.hostname or "").lower()
         if not hostname:
             raise ValidationError("Unable to determine hostname for target URL", details={"url": url})
-        allowed = [domain.lower() for domain in settings.allowed_api_domains]
+        allowed = [domain.strip().lower() for domain in settings.allowed_api_domains if domain]
         for domain in allowed:
             if domain.startswith("*."):
-                suffix = domain[1:]
-                if hostname.endswith(suffix) or hostname == suffix.lstrip("."):
+                suffix = domain[2:].lstrip(".")
+                if not suffix:
+                    continue
+                if hostname == suffix or hostname.endswith(f".{suffix}"):
                     return
-            elif hostname == domain or hostname.endswith(f".{domain}"):
-                return
+            else:
+                normalized = domain.lstrip(".")
+                if hostname == normalized:
+                    return
         raise ValidationError(
             "Domain not allowed for API Studio calls",
             details={"host": hostname, "allowed": settings.allowed_api_domains}

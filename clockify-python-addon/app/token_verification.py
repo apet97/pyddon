@@ -8,6 +8,7 @@ from jose.exceptions import JWTError
 from app.config import get_settings
 from app.utils.logger import get_logger
 from app.utils.errors import AuthenticationError
+from app.metrics import metrics_registry
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -40,7 +41,12 @@ def _parse_hmac_components(signature: str) -> tuple[str, str]:
     return "sha256", normalized
 
 
-def _verify_hmac_signature(body: bytes, signature: str, workspace_id: Optional[str]) -> Dict[str, Any]:
+def _verify_hmac_signature(
+    body: bytes,
+    signature: str,
+    workspace_id: Optional[str],
+    scope: str = "webhook",
+) -> Dict[str, Any]:
     """Validate Clockify webhook payloads using the shared secret when provided."""
     secret = settings.webhook_hmac_secret
     if not secret:
@@ -60,6 +66,7 @@ def _verify_hmac_signature(body: bytes, signature: str, workspace_id: Optional[s
         workspace_id=workspace_id,
         algorithm=algorithm,
     )
+    metrics_registry.record_hmac_fallback(scope)
     return {"workspaceId": workspace_id, "algorithm": algorithm}
 
 
@@ -252,6 +259,7 @@ async def verify_lifecycle_signature(
         return {"workspaceId": workspace_id or "dev-workspace", "addonId": addon_id or settings.addon_key}
     
     if not clockify_signature:
+        metrics_registry.record_signature_failure("lifecycle")
         raise AuthenticationError(f"Missing {CANONICAL_SIGNATURE_HEADER} header")
     
     try:
@@ -271,6 +279,7 @@ async def verify_lifecycle_signature(
         return payload
         
     except Exception as e:
+        metrics_registry.record_signature_failure("lifecycle")
         logger.error("lifecycle_signature_verification_failed", error=str(e))
         raise AuthenticationError(f"Lifecycle signature verification failed: {str(e)}")
 
@@ -293,6 +302,7 @@ async def verify_webhook_signature(
         return {"workspaceId": workspace_id or "dev-workspace"}
     
     if not clockify_signature:
+        metrics_registry.record_signature_failure("webhook")
         raise AuthenticationError(f"Missing {CANONICAL_SIGNATURE_HEADER} header")
     
     try:
@@ -311,8 +321,14 @@ async def verify_webhook_signature(
     except AuthenticationError as err:
         logger.warning("jwt_verification_failed_trying_hmac", error=str(err))
         if settings.webhook_hmac_secret:
-            return _verify_hmac_signature(body, clockify_signature, workspace_id)
+            try:
+                return _verify_hmac_signature(body, clockify_signature, workspace_id, scope="webhook")
+            except AuthenticationError:
+                metrics_registry.record_signature_failure("webhook")
+                raise
+        metrics_registry.record_signature_failure("webhook")
         raise
     except Exception as e:
+        metrics_registry.record_signature_failure("webhook")
         logger.error("webhook_signature_verification_failed", error=str(e))
         raise AuthenticationError(f"Webhook signature verification failed: {str(e)}") from e

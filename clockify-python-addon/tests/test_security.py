@@ -15,6 +15,7 @@ from app.token_verification import (
     verify_webhook_signature,
 )
 from app.utils.errors import AuthenticationError
+from app.metrics import metrics_registry
 
 
 @pytest.mark.asyncio
@@ -108,6 +109,19 @@ async def test_webhook_signature_missing_header():
             )
 
 
+@pytest.mark.asyncio
+async def test_signature_failure_metrics_increment():
+    """Signature failures should increment metrics."""
+    metrics_registry.reset()
+    with pytest.raises(AuthenticationError, match="Missing Clockify-Signature"):
+        await verify_webhook_signature(
+            b"{}",
+            None,
+            workspace_id="workspace-metrics"
+        )
+    assert metrics_registry.signature_failures.get("webhook") == 1
+
+
 def test_signature_disabled_logs_warning(caplog, capsys):
     """Disabling verification should emit a clear warning."""
     import logging
@@ -196,10 +210,12 @@ async def test_webhook_hmac_fallback_success(monkeypatch):
 
     monkeypatch.setattr(global_settings, "require_signature_verification", True)
     monkeypatch.setattr(global_settings, "webhook_hmac_secret", shared_secret)
+    metrics_registry.reset()
 
     result = await verify_webhook_signature(body, f"sha256={digest}", workspace_id="ws-1")
     assert result["workspaceId"] == "ws-1"
     assert result["algorithm"] == "sha256"
+    assert metrics_registry.hmac_fallbacks.get("webhook") == 1
 
 
 @pytest.mark.asyncio
@@ -216,9 +232,11 @@ async def test_webhook_hmac_fallback_rejects_mismatch(monkeypatch):
 
     monkeypatch.setattr(global_settings, "require_signature_verification", True)
     monkeypatch.setattr(global_settings, "webhook_hmac_secret", shared_secret)
+    metrics_registry.reset()
 
     with pytest.raises(AuthenticationError, match="HMAC mismatch"):
         await verify_webhook_signature(body, "sha256=deadbeef", workspace_id="ws-2")
+    assert metrics_registry.signature_failures.get("webhook") == 1
 
 
 def test_signature_header_resolution_prefers_canonical():

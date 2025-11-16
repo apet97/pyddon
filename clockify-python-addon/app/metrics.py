@@ -27,6 +27,8 @@ class MetricsRegistry:
             self.lifecycle_events_failed: Dict[str, int] = defaultdict(int)
             self.bootstrap_jobs_total = 0
             self.bootstrap_jobs_failed = 0
+            self.signature_failures: Dict[str, int] = defaultdict(int)
+            self.hmac_fallbacks: Dict[str, int] = defaultdict(int)
 
     def record_api_call(self, success: bool) -> None:
         """Record an API Studio call result."""
@@ -62,6 +64,18 @@ class MetricsRegistry:
             self.bootstrap_jobs_total += 1
             if not success:
                 self.bootstrap_jobs_failed += 1
+
+    def record_signature_failure(self, scope: str) -> None:
+        """Record that signature verification failed for a given scope."""
+        normalized = self._normalize_label(scope)
+        with self._lock:
+            self.signature_failures[normalized] += 1
+
+    def record_hmac_fallback(self, scope: str) -> None:
+        """Record that HMAC fallback verification succeeded."""
+        normalized = self._normalize_label(scope)
+        with self._lock:
+            self.hmac_fallbacks[normalized] += 1
 
     def render(self) -> str:
         """Render metrics in Prometheus text exposition format."""
@@ -123,6 +137,30 @@ class MetricsRegistry:
                     f"clockify_bootstrap_jobs_failed_total {self.bootstrap_jobs_failed}",
                 ]
             )
+
+            if self.signature_failures:
+                lines.extend(
+                    [
+                        "# HELP clockify_signature_verification_failures_total Clockify-Signature failures by scope",
+                        "# TYPE clockify_signature_verification_failures_total counter",
+                    ]
+                )
+                for scope, count in sorted(self.signature_failures.items()):
+                    lines.append(
+                        f'clockify_signature_verification_failures_total{{scope="{scope}"}} {count}'
+                    )
+
+            if self.hmac_fallbacks:
+                lines.extend(
+                    [
+                        "# HELP clockify_hmac_fallback_total Clockify webhook HMAC fallback verifications by scope",
+                        "# TYPE clockify_hmac_fallback_total counter",
+                    ]
+                )
+                for scope, count in sorted(self.hmac_fallbacks.items()):
+                    lines.append(
+                        f'clockify_hmac_fallback_total{{scope="{scope}"}} {count}'
+                    )
 
             return "\n".join(lines) + "\n"
 

@@ -12,6 +12,8 @@ def test_metrics_registry_render_includes_counters():
     registry.record_bootstrap_job(success=True)
     registry.record_bootstrap_job(success=False)
     registry.record_rate_limit_wait(0.25)
+    registry.record_signature_failure("webhook")
+    registry.record_hmac_fallback("webhook")
 
     output = registry.render()
 
@@ -23,3 +25,5 @@ def test_metrics_registry_render_includes_counters():
     assert "clockify_bootstrap_jobs_failed_total 1" in output
     assert "clockify_rate_limit_events_total 1" in output
     assert "clockify_rate_limit_wait_seconds_total 0.25" in output
+    assert 'clockify_signature_verification_failures_total{scope="webhook"} 1' in output
+    assert 'clockify_hmac_fallback_total{scope="webhook"} 1' in output

@@ -1,5 +1,6 @@
 import pytest
 from app.api_caller import ClockifyAPIExecutor
+from app.config import Settings
 from app.openapi_loader import OpenAPIParser
 from app.schemas.api_call import OpenAPIEndpoint, APICallRequest
 from app.utils.errors import ValidationError
@@ -144,6 +145,32 @@ def test_domain_whitelist_blocks_external_hosts():
     executor = ClockifyAPIExecutor()
     with pytest.raises(ValidationError):
         executor._validate_target_host("https://malicious.example.com/api")
+
+
+def test_domain_whitelist_rejects_nested_subdomains_for_exact_hosts(monkeypatch):
+    executor = ClockifyAPIExecutor()
+    custom_settings = Settings(
+        base_url="https://example.com",
+        addon_key="addon",
+        database_url="sqlite+aiosqlite:///./addon.db",
+        allowed_api_domains=["api.clockify.me"],
+    )
+    monkeypatch.setattr("app.api_caller.settings", custom_settings)
+    with pytest.raises(ValidationError):
+        executor._validate_target_host("https://nested.api.clockify.me/v1/resource")
+
+
+def test_domain_whitelist_accepts_nested_subdomains_with_wildcard(monkeypatch):
+    executor = ClockifyAPIExecutor()
+    custom_settings = Settings(
+        base_url="https://example.com",
+        addon_key="addon",
+        database_url="sqlite+aiosqlite:///./addon.db",
+        allowed_api_domains=["*.clockify.me"],
+    )
+    monkeypatch.setattr("app.api_caller.settings", custom_settings)
+    # Should not raise
+    executor._validate_target_host("https://nested.api.clockify.me/v1/resource")
 
 
 class _DummyResponse:
