@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -10,6 +11,8 @@ from clockify_core import ClockifyClient, RateLimiter, list_safe_get_operations
 
 from .config import settings
 from .models import BootstrapState, EntityCache
+
+logger = logging.getLogger(__name__)
 
 
 async def run_bootstrap_for_workspace(session: AsyncSession, workspace_id: str, client: ClockifyClient) -> None:
@@ -74,7 +77,12 @@ async def run_bootstrap_for_workspace(session: AsyncSession, workspace_id: str, 
             except Exception as e:
                 error_msg = f"Error fetching {op['path']}: {str(e)}"
                 errors.append(error_msg)
-                print(error_msg)
+                logger.error(
+                    "bootstrap_core_operation_failed",
+                    workspace_id=workspace_id,
+                    path=op.get("path"),
+                    error=str(e),
+                )
 
         # Fetch workspace-scoped endpoints
         for op in workspace_ops:
@@ -93,17 +101,29 @@ async def run_bootstrap_for_workspace(session: AsyncSession, workspace_id: str, 
             except Exception as e:
                 error_msg = f"Error fetching {op['path']}: {str(e)}"
                 errors.append(error_msg)
-                print(error_msg)
+                logger.error(
+                    "bootstrap_workspace_operation_failed",
+                    workspace_id=workspace_id,
+                    path=op.get("path"),
+                    error=str(e),
+                )
 
         # Mark as complete
         bootstrap_state.status = "COMPLETE" if not errors else "COMPLETE_WITH_ERRORS"
         if errors:
             bootstrap_state.last_error = "; ".join(errors[:5])  # Store first 5 errors
+            logger.warning(
+                "bootstrap_completed_with_errors",
+                workspace_id=workspace_id,
+                error_count=len(errors),
+            )
+        else:
+            logger.info("bootstrap_completed", workspace_id=workspace_id)
 
     except Exception as e:
         bootstrap_state.status = "FAILED"
         bootstrap_state.last_error = str(e)
-        print(f"Bootstrap failed for workspace {workspace_id}: {e}")
+        logger.exception("bootstrap_failed", workspace_id=workspace_id)
 
     await session.commit()
 
@@ -168,14 +188,25 @@ async def _fetch_and_store_operation(
 
             # Safety limit to avoid infinite loops
             if page > 100:
-                print(f"Warning: Reached page limit for {path}")
+                logger.warning(
+                    "bootstrap_page_limit_reached",
+                    path=path,
+                    workspace_id=workspace_id,
+                    page_limit=100,
+                )
                 break
 
         except Exception as e:
             # If first page fails, raise; otherwise, log and continue
             if page == 1:
                 raise
-            print(f"Error fetching page {page} of {path}: {e}")
+            logger.warning(
+                "bootstrap_page_fetch_failed",
+                workspace_id=workspace_id,
+                path=path,
+                page=page,
+                error=str(e),
+            )
             break
 
     # Store in EntityCache

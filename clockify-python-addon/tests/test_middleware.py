@@ -55,7 +55,7 @@ def middleware_client() -> TestClient:
 def test_request_id_header_and_logs_present(middleware_client: TestClient):
     with capture_structlog_entries() as logs:
         api_response = middleware_client.get("/ping")
-        webhook_response = middleware_client.post("/limited", data="123")
+        webhook_response = middleware_client.post("/limited", content=b"123")
         lifecycle_response = middleware_client.post("/lifecycle/install")
 
     assert api_response.status_code == 200
@@ -70,7 +70,7 @@ def test_request_id_header_and_logs_present(middleware_client: TestClient):
 
 
 def test_payload_limit_rejects_large_body(middleware_client: TestClient):
-    too_large = middleware_client.post("/limited", data="x" * 20)
+    too_large = middleware_client.post("/limited", content=b"x" * 20)
     assert too_large.status_code == 413
     body = too_large.json()
     assert body["max_bytes"] == 10

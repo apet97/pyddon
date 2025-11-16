@@ -13,6 +13,7 @@ from universal_webhook.models import (
     Flow,
     FlowExecution,
     Installation,
+    EntityCache,
     WebhookLog,
 )
 
@@ -310,3 +311,72 @@ def test_custom_webhook_missing_header(client):
     payload = {"data": "test"}
     response = client.post("/webhooks/custom/test", json=payload)
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_fetches_all_pages():
+    """Ensure bootstrap helper paginates and stores every page."""
+    from universal_webhook.bootstrap import _fetch_and_store_operation
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
+    test_session_maker = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    class DummyResponse:
+        def __init__(self, data):
+            self._data = data
+
+        def json(self):
+            return self._data
+
+        def raise_for_status(self):
+            return None
+
+    class DummyClient:
+        def __init__(self, pages):
+            self.pages = pages
+
+        async def get(self, path, params=None):
+            page = params.get("page", 1)
+            data = self.pages.get(page, [])
+            return DummyResponse(data)
+
+    class NoopLimiter:
+        async def acquire(self):
+            return None
+
+    first_page = [{"id": f"p{i}"} for i in range(50)]
+    second_page = [{"id": "extra-1"}, {"id": "extra-2"}]
+    pages = {1: first_page, 2: second_page}
+    operation = {
+        "path": "/v1/workspaces/{workspaceId}/projects",
+        "operation_id": "listProjects",
+        "tags": ["PROJECTS"],
+    }
+
+    async with test_session_maker() as session:
+        await _fetch_and_store_operation(
+            session=session,
+            workspace_id="ws-bootstrap",
+            client=DummyClient(pages),
+            operation=operation,
+            rate_limiter=NoopLimiter(),
+            workspace_context={"workspaceId": "ws-bootstrap"},
+        )
+        result = await session.execute(
+            select(EntityCache).where(EntityCache.workspace_id == "ws-bootstrap")
+        )
+        records = result.scalars().all()
+
+    await engine.dispose()
+
+    expected_ids = {item["id"] for item in (first_page + second_page)}
+    assert len(records) == len(expected_ids)
+    assert {record.payload["id"] for record in records} == expected_ids

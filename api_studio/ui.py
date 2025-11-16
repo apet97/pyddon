@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -8,10 +10,13 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .db import get_session
-from .models import BootstrapState, EntityCache, Flow, FlowExecution, WebhookLog
+from .bootstrap import run_bootstrap_for_workspace
+from .clockify_client import ClockifyClient
+from .db import async_session_maker, get_session
+from .models import BootstrapState, EntityCache, Flow, FlowExecution, Installation, WebhookLog
 
 router = APIRouter(prefix="/ui", tags=["ui"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -415,11 +420,6 @@ async def trigger_bootstrap(
     session: AsyncSession = Depends(get_session)
 ) -> dict:
     """Manually trigger bootstrap for a workspace."""
-    from .bootstrap import run_bootstrap_for_workspace
-    from .clockify_client import ClockifyClient
-    from .models import Installation
-    import asyncio
-    
     # Get installation
     stmt = select(Installation).where(
         Installation.workspace_id == workspace_id,
@@ -431,13 +431,30 @@ async def trigger_bootstrap(
     if not installation:
         raise HTTPException(status_code=404, detail="No active installation for workspace")
     
-    # Create client
-    client = ClockifyClient(
-        base_url=installation.api_url,
-        addon_token=installation.addon_token
+    asyncio.create_task(
+        _run_bootstrap_background(
+            workspace_id=workspace_id,
+            api_url=installation.api_url,
+            addon_token=installation.addon_token,
+        )
     )
     
-    # Trigger bootstrap in background
-    asyncio.create_task(run_bootstrap_for_workspace(session, workspace_id, client))
-    
     return {"status": "triggered", "message": "Bootstrap started in background"}
+
+
+async def _run_bootstrap_background(
+    workspace_id: str,
+    api_url: str,
+    addon_token: str,
+) -> None:
+    """Run bootstrap using an isolated DB session so request sessions can close."""
+    client = ClockifyClient(base_url=api_url, addon_token=addon_token)
+    async with async_session_maker() as background_session:
+        try:
+            await run_bootstrap_for_workspace(background_session, workspace_id, client)
+        except Exception as exc:
+            logger.error(
+                "bootstrap_background_failed",
+                workspace_id=workspace_id,
+                error=str(exc),
+            )

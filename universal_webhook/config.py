@@ -24,6 +24,9 @@ class Settings(BaseClockifySettings):
     bootstrap_time_entry_days_back: int = Field(
         default=30, alias="UW_BOOTSTRAP_TIME_ENTRY_DAYS"
     )
+    bootstrap_max_pages: int = Field(
+        default=200, alias="UW_BOOTSTRAP_MAX_PAGES"
+    )
 
     # Webhook settings
     enable_custom_webhooks: bool = Field(default=True, alias="UW_ENABLE_CUSTOM_WEBHOOKS")

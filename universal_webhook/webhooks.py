@@ -2,17 +2,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from clockify_core import ClockifyClient
+
 from .config import settings
-from .db import get_db
+from .db import async_session_maker, get_db
+from .flows import evaluate_and_run_flows_for_webhook
 from .models import Installation, WebhookLog
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/clockify")
@@ -82,15 +87,12 @@ async def receive_clockify_webhook(
 
     # Fire-and-forget flow evaluation if flows are enabled
     if settings.enable_flows:
-        from .flows import evaluate_and_run_flows_for_webhook
-        from clockify_core import ClockifyClient
-        
         asyncio.create_task(
-            evaluate_and_run_flows_for_webhook(
-                session=session,
+            _run_flow_evaluation(
                 workspace_id=workspace_id,
-                webhook=webhook_log,
-                client=ClockifyClient(installation.api_url, installation.addon_token)
+                webhook_id=webhook_log.id,
+                api_url=installation.api_url,
+                addon_token=installation.addon_token,
             )
         )
 
@@ -167,15 +169,12 @@ async def receive_custom_webhook(
 
     # Fire-and-forget flow evaluation if flows are enabled
     if settings.enable_flows:
-        from .flows import evaluate_and_run_flows_for_webhook
-        from clockify_core import ClockifyClient
-        
         asyncio.create_task(
-            evaluate_and_run_flows_for_webhook(
-                session=session,
+            _run_flow_evaluation(
                 workspace_id=workspace_id,
-                webhook=webhook_log,
-                client=ClockifyClient(installation.api_url, installation.addon_token)
+                webhook_id=webhook_log.id,
+                api_url=installation.api_url,
+                addon_token=installation.addon_token,
             )
         )
 
@@ -186,3 +185,36 @@ async def receive_custom_webhook(
         "eventType": event_type,
         "workspaceId": workspace_id
     }
+
+
+async def _run_flow_evaluation(
+    workspace_id: str,
+    webhook_id: int,
+    api_url: str,
+    addon_token: str,
+) -> None:
+    """Evaluate flows for a webhook using a dedicated DB session."""
+    client = ClockifyClient(api_url, addon_token)
+    async with async_session_maker() as background_session:
+        webhook = await background_session.get(WebhookLog, webhook_id)
+        if not webhook:
+            logger.warning(
+                "webhook_not_found_for_flow_evaluation",
+                workspace_id=workspace_id,
+                webhook_id=webhook_id,
+            )
+            return
+        try:
+            await evaluate_and_run_flows_for_webhook(
+                session=background_session,
+                workspace_id=workspace_id,
+                webhook=webhook,
+                client=client,
+            )
+        except Exception as exc:
+            logger.error(
+                "flow_evaluation_failed",
+                workspace_id=workspace_id,
+                webhook_id=webhook_id,
+                error=str(exc),
+            )

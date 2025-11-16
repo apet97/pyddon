@@ -1,6 +1,8 @@
 """UI endpoints for Universal Webhook add-on."""
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -9,7 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .db import get_db
+from clockify_core import ClockifyClient
+
+from .bootstrap import run_bootstrap_for_workspace
+from .db import async_session_maker, get_db
 from .models import (
     BootstrapState,
     EntityCache,
@@ -20,6 +25,7 @@ from .models import (
 )
 
 router = APIRouter(prefix="/ui", tags=["ui"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -431,10 +437,6 @@ async def trigger_bootstrap(
     session: AsyncSession = Depends(get_db),
 ) -> Dict[str, str]:
     """Manually trigger bootstrap for workspace."""
-    import asyncio
-    from .bootstrap import run_bootstrap_for_workspace
-    from clockify_core import ClockifyClient
-    
     # Get installation
     stmt = select(Installation).where(
         Installation.workspace_id == workspace_id,
@@ -446,12 +448,11 @@ async def trigger_bootstrap(
     if not installation:
         raise HTTPException(status_code=404, detail="Installation not found")
 
-    # Fire-and-forget bootstrap
     asyncio.create_task(
-        run_bootstrap_for_workspace(
-            session=session,
+        _run_bootstrap_background(
             workspace_id=workspace_id,
-            client=ClockifyClient(installation.api_url, installation.addon_token)
+            api_url=installation.api_url,
+            addon_token=installation.addon_token,
         )
     )
 
@@ -459,3 +460,25 @@ async def trigger_bootstrap(
         "status": "scheduled",
         "workspace_id": workspace_id
     }
+
+
+async def _run_bootstrap_background(
+    workspace_id: str,
+    api_url: str,
+    addon_token: str,
+) -> None:
+    """Execute bootstrap using an isolated DB session."""
+    client = ClockifyClient(api_url, addon_token)
+    async with async_session_maker() as background_session:
+        try:
+            await run_bootstrap_for_workspace(
+                session=background_session,
+                workspace_id=workspace_id,
+                client=client,
+            )
+        except Exception as exc:
+            logger.error(
+                "bootstrap_background_failed",
+                workspace_id=workspace_id,
+                error=str(exc),
+            )
