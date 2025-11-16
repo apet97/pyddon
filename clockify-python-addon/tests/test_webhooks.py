@@ -1,5 +1,13 @@
+import json
+from contextlib import asynccontextmanager
+from typing import Dict, List
+from unittest.mock import AsyncMock
+
 import pytest
 from sqlalchemy import select
+from starlette.requests import Request
+
+from app import webhook_router
 from app.db.models import WebhookEvent
 from app.utils.dedupe import dedupe_store
 
@@ -126,3 +134,101 @@ async def test_webhook_query_by_type(db_session, sample_workspace_id):
     webhooks = result.scalars().all()
     
     assert len(webhooks) == 2
+
+
+def _build_request(path: str, payload: Dict[str, object]) -> Request:
+    """Build a Starlette Request object for invoking router handlers directly."""
+    body = json.dumps(payload).encode("utf-8")
+
+    async def receive():
+        if receive.sent:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        receive.sent = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    receive.sent = False  # type: ignore[attr-defined]
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "POST",
+        "path": path,
+        "root_path": "",
+        "scheme": "https",
+        "headers": [(b"content-type", b"application/json")],
+        "query_string": b"",
+        "client": ("testclient", 12345),
+        "server": ("testserver", 443),
+    }
+    return Request(scope, receive)
+
+
+def _mock_webhook_dependencies(monkeypatch, workspace_id: str) -> List[object]:
+    """Patch DB + signature helpers so router handlers can be exercised in isolation."""
+    recorded_sessions: List[object] = []
+
+    class DummySession:
+        def __init__(self) -> None:
+            self.added: List[object] = []
+
+        def add(self, obj) -> None:
+            self.added.append(obj)
+
+        async def commit(self) -> None:
+            return None
+
+    @asynccontextmanager
+    async def fake_session():
+        session = DummySession()
+        recorded_sessions.append(session)
+        yield session
+
+    monkeypatch.setattr("app.webhook_router.get_db_session", fake_session)
+    monkeypatch.setattr(
+        "app.webhook_router.verify_webhook_signature",
+        AsyncMock(return_value={"workspaceId": workspace_id}),
+    )
+    monkeypatch.setattr("app.webhook_router.is_duplicate_event", AsyncMock(return_value=False))
+    return recorded_sessions
+
+
+@pytest.mark.asyncio
+async def test_time_off_request_webhook_flow(monkeypatch):
+    """TIME_OFF_REQUESTED should flow through /webhooks/timeoff without drift."""
+    workspace_id = "ws-timeoff"
+    sessions = _mock_webhook_dependencies(monkeypatch, workspace_id)
+    payload = {
+        "workspaceId": workspace_id,
+        "eventType": "TIME_OFF_REQUESTED",
+        "id": "evt-timeoff-1",
+    }
+    request = _build_request("/webhooks/timeoff", payload)
+
+    response = await webhook_router.time_off_events(
+        request, payload, x_webhook_signature="signature-token"
+    )
+    assert response.received is True
+    stored = sessions[-1].added[0]
+    assert stored.workspace_id == workspace_id
+    assert stored.event_type == "TIME_OFF_REQUESTED"
+    assert stored.event_id == payload["id"]
+
+
+@pytest.mark.asyncio
+async def test_balance_updated_webhook_flow(monkeypatch):
+    """BALANCE_UPDATED events map to /webhooks/balance with full persistence."""
+    workspace_id = "ws-balance"
+    sessions = _mock_webhook_dependencies(monkeypatch, workspace_id)
+    payload = {
+        "workspaceId": workspace_id,
+        "eventType": "BALANCE_UPDATED",
+        "id": "evt-balance-99",
+    }
+    request = _build_request("/webhooks/balance", payload)
+
+    response = await webhook_router.balance_updated(
+        request, payload, x_webhook_signature="signature-token"
+    )
+    assert response.received is True
+    stored = sessions[-1].added[0]
+    assert stored.workspace_id == workspace_id
+    assert stored.event_type == "BALANCE_UPDATED"

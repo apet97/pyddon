@@ -69,6 +69,13 @@ This document lists all environment variables used by the Clockify Python Addon.
 - **Example**: `true` or `false`
 - **Note**: MUST be `true` in production and staging. Only flip it to `false` for automated tests or local experiments, and never deploy with the flag disabled.
 
+### `WEBHOOK_HMAC_SECRET`
+- **Description**: Optional shared secret for validating HMAC-signed webhooks when Clockify sends `Clockify-Signature` as `sha256=<digest>`
+- **Required**: No
+- **Default**: `None`
+- **Example**: `super-secret-value`
+- **Note**: When set, JWT verification still runs first; if the token is absent or invalid, the addon falls back to computing an HMAC-SHA256 digest of the payload using this secret.
+
 ### `CLOCKIFY_ENVIRONMENT`
 - **Description**: Clockify environment hint used to auto-select JWKS (`prod` or `dev`)
 - **Required**: No

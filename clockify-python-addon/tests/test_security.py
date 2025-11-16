@@ -1,14 +1,18 @@
 """
 Tests for security features including JWT verification and signature validation.
 """
+import hashlib
+import hmac
+
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
+
 from app.token_verification import (
     fetch_jwks,
     verify_jwt_token_rs256,
     verify_lifecycle_signature,
-    verify_webhook_signature
+    verify_webhook_signature,
 )
 from app.utils.errors import AuthenticationError
 
@@ -126,25 +130,95 @@ def test_signature_disabled_logs_warning(caplog, capsys):
 
 
 @pytest.mark.asyncio
-async def test_workspace_id_enforcement():
-    """Test that workspace ID mismatch is detected and rejected."""
-    # This would require mocking the full JWT decode process
-    # For now, we document the expected behavior
-    
-    # Expected: If token claims workspaceId != expected workspaceId, 
-    # verify_jwt_token_rs256 should raise AuthenticationError
-    pass
+async def test_workspace_id_enforcement(monkeypatch):
+    """Mismatch between expected and claimed workspace IDs should be rejected."""
+    monkeypatch.setattr(
+        "app.token_verification.fetch_jwks",
+        AsyncMock(return_value={"keys": [{"kid": "kid-1"}]}),
+    )
+    monkeypatch.setattr(
+        "app.token_verification.jose_jwt.get_unverified_header",
+        lambda _token: {"kid": "kid-1"},
+    )
+    monkeypatch.setattr(
+        "app.token_verification.jose_jwt.decode",
+        lambda *args, **kwargs: {
+            "iss": "clockify",
+            "sub": "clockify-python-addon",
+            "type": "addon",
+            "workspaceId": "ws-actual",
+            "addonId": "addon-1",
+        },
+    )
+
+    with pytest.raises(AuthenticationError, match="Workspace ID mismatch"):
+        await verify_jwt_token_rs256("test.token", expected_workspace_id="ws-expected")
 
 
-@pytest.mark.asyncio  
-async def test_addon_id_enforcement():
-    """Test that addon ID mismatch is detected and rejected."""
-    # This would require mocking the full JWT decode process
-    # For now, we document the expected behavior
-    
-    # Expected: If token claims addonId != expected addonId,
-    # verify_jwt_token_rs256 should raise AuthenticationError
-    pass
+@pytest.mark.asyncio
+async def test_addon_id_enforcement(monkeypatch):
+    """Addon ID mismatches must raise AuthenticationError."""
+    monkeypatch.setattr(
+        "app.token_verification.fetch_jwks",
+        AsyncMock(return_value={"keys": [{"kid": "kid-2"}]}),
+    )
+    monkeypatch.setattr(
+        "app.token_verification.jose_jwt.get_unverified_header",
+        lambda _token: {"kid": "kid-2"},
+    )
+    monkeypatch.setattr(
+        "app.token_verification.jose_jwt.decode",
+        lambda *args, **kwargs: {
+            "iss": "clockify",
+            "sub": "clockify-python-addon",
+            "type": "addon",
+            "workspaceId": "workspace-123",
+            "addonId": "addon-real",
+        },
+    )
+
+    with pytest.raises(AuthenticationError, match="Addon ID mismatch"):
+        await verify_jwt_token_rs256("test.token", expected_addon_id="addon-expected")
+
+
+@pytest.mark.asyncio
+async def test_webhook_hmac_fallback_success(monkeypatch):
+    """When JWT fails but HMAC secret is set, signatures should still verify."""
+    body = b'{"workspaceId":"ws-1"}'
+    shared_secret = "top-secret"
+    digest = hmac.new(shared_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+
+    monkeypatch.setattr(
+        "app.token_verification.verify_jwt_token_rs256",
+        AsyncMock(side_effect=AuthenticationError("bad jwt")),
+    )
+    from app.token_verification import settings as global_settings
+
+    monkeypatch.setattr(global_settings, "require_signature_verification", True)
+    monkeypatch.setattr(global_settings, "webhook_hmac_secret", shared_secret)
+
+    result = await verify_webhook_signature(body, f"sha256={digest}", workspace_id="ws-1")
+    assert result["workspaceId"] == "ws-1"
+    assert result["algorithm"] == "sha256"
+
+
+@pytest.mark.asyncio
+async def test_webhook_hmac_fallback_rejects_mismatch(monkeypatch):
+    """Invalid HMAC signatures should raise AuthenticationError."""
+    body = b'{"workspaceId":"ws-2"}'
+    shared_secret = "top-secret"
+
+    monkeypatch.setattr(
+        "app.token_verification.verify_jwt_token_rs256",
+        AsyncMock(side_effect=AuthenticationError("bad jwt")),
+    )
+    from app.token_verification import settings as global_settings
+
+    monkeypatch.setattr(global_settings, "require_signature_verification", True)
+    monkeypatch.setattr(global_settings, "webhook_hmac_secret", shared_secret)
+
+    with pytest.raises(AuthenticationError, match="HMAC mismatch"):
+        await verify_webhook_signature(body, "sha256=deadbeef", workspace_id="ws-2")
 
 
 def test_signature_header_resolution_prefers_canonical():

@@ -61,7 +61,7 @@ This document summarizes the security and production readiness hardening applied
 - ✅ Async `verify_webhook_signature()` implementation
 - ✅ JWT-based verification with workspace validation
 - ✅ Claims enforcement (workspace consistency check)
-- ✅ Graceful fallback if JWT fails (placeholder for HMAC)
+- ✅ Graceful fallback if JWT fails (HMAC-SHA256 via `WEBHOOK_HMAC_SECRET`)
 - ✅ Developer mode bypass clearly documented
 
 ## Phase 3: Manifest & Event Subscriptions - ✅ COMPLETE

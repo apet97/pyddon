@@ -29,7 +29,7 @@ All blocker and high-priority items from the previous review cycle are complete.
 - [x] **Domain allowlist** – API Studio outbound calls are limited to `settings.allowed_api_domains`; violations return HTTP 400 (`app/api_caller.py` + tests).
 - [x] **Payload caps** – `/api-call` limited to 1 MB and `/webhooks/*` to 5 MB with structured 413 responses (`app/middleware.py`, tests).
 - [x] **Metrics instrumentation** – `app/metrics.py` tracks API calls, lifecycle callbacks, webhooks, and bootstrap jobs; exposed at `/metrics`.
-- [ ] **Optional (MEDIUM):** Add HMAC fallback verification for future webhook secret support.
+- [x] **Optional (MEDIUM):** Add HMAC fallback verification for future webhook secret support (now available via `WEBHOOK_HMAC_SECRET` + SHA256 digest checks).
 
 ### 2. Webhooks & Lifecycle ✅
 - [x] **Manifest parity** – `generate_manifest()` now loads `manifest.json`, injects the runtime `BASE_URL`, and surfaces all 50 events; `python3 -c "import json; print(len(json.load(open('manifest.json'))['webhooks']))"` → `50`.
@@ -112,10 +112,9 @@ PY
 ---
 
 ## Remaining Optional Items (MEDIUM/LOW)
-1. Add optional HMAC webhook verification once Clockify exposes shared secrets.
-2. Expose bootstrap restart/resume controls directly in the sidebar UI.
-3. Provide a lightweight history/replay list for recently executed API Studio calls.
-4. Offer an admin action to re-run webhook registration after external credential changes.
+1. Expose bootstrap restart/resume controls directly in the sidebar UI.
+2. Provide a lightweight history/replay list for recently executed API Studio calls.
+3. Offer an admin action to re-run webhook registration after external credential changes.
 
 These items are nice-to-haves and explicitly tracked as future work; they do not block marketplace submission.
 

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     clockify_jwks_dev_url: str = "https://developer.clockify.me/.well-known/jwks.json"
     clockify_environment: str = "prod"
     require_signature_verification: bool = True
+    webhook_hmac_secret: Optional[str] = None
     
     # Clockify API
     clockify_api_base: str = "https://api.clockify.me/api/v1"

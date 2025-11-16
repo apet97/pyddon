@@ -9,6 +9,7 @@
 1. Hardened the API caller so HTTP 4xx/5xx responses are treated as failures with clear messaging, structured error logging, and accurate Prometheus counters.
 2. Fixed the workspace token-bucket limiter so it no longer sleeps while holding the global lock and now enforces per-workspace waits precisely.
 3. Added regression tests covering the new API caller paths and token bucket behaviour to guard against future regressions.
+4. Enabled optional HMAC-SHA256 verification for Clockify webhooks (`WEBHOOK_HMAC_SECRET`) and expanded manifest/webhook tests so spec updates and shared-secret tenants remain covered.
 
 ## Final Status
 ✅ Ready for staging deployment and Clockify Marketplace submission (security, correctness, and observability verified on 2025-02-14).

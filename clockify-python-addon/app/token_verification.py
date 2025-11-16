@@ -14,6 +14,9 @@ logger = get_logger(__name__)
 
 CANONICAL_SIGNATURE_HEADER = "Clockify-Signature"
 LEGACY_SIGNATURE_HEADERS = ("X-Addon-Signature", "X-Webhook-Signature", "clockify-signature")
+HMAC_ALGORITHMS = {
+    "sha256": hashlib.sha256,
+}
 
 
 def resolve_signature_header(*candidates: Optional[str]) -> Optional[str]:
@@ -22,6 +25,42 @@ def resolve_signature_header(*candidates: Optional[str]) -> Optional[str]:
         if candidate:
             return candidate
     return None
+
+
+def _parse_hmac_components(signature: str) -> tuple[str, str]:
+    """Support `sha256=<hex>` and bare hex encodings."""
+    normalized = (signature or "").strip()
+    if not normalized:
+        raise AuthenticationError("Webhook signature verification failed: empty signature header")
+    if "=" in normalized:
+        prefix, digest = normalized.split("=", 1)
+        digest = digest.strip()
+        algorithm = prefix.strip().lower().replace("hmac-", "")
+        return (algorithm or "sha256", digest)
+    return "sha256", normalized
+
+
+def _verify_hmac_signature(body: bytes, signature: str, workspace_id: Optional[str]) -> Dict[str, Any]:
+    """Validate Clockify webhook payloads using the shared secret when provided."""
+    secret = settings.webhook_hmac_secret
+    if not secret:
+        raise AuthenticationError("Webhook signature verification failed")
+
+    algorithm, presented = _parse_hmac_components(signature)
+    hasher = HMAC_ALGORITHMS.get(algorithm)
+    if not hasher:
+        raise AuthenticationError(f"Webhook signature verification failed: unsupported HMAC algorithm '{algorithm}'")
+
+    expected = hmac.new(secret.encode("utf-8"), body, hasher).hexdigest()
+    if not hmac.compare_digest(presented.lower(), expected.lower()):
+        raise AuthenticationError("Webhook signature verification failed: HMAC mismatch")
+
+    logger.info(
+        "webhook_signature_verified_hmac",
+        workspace_id=workspace_id,
+        algorithm=algorithm,
+    )
+    return {"workspaceId": workspace_id, "algorithm": algorithm}
 
 
 # Cache for JWKS
@@ -237,7 +276,7 @@ async def verify_lifecycle_signature(
 
 
 async def verify_webhook_signature(
-    payload: bytes,
+    body: bytes,
     clockify_signature: Optional[str],
     workspace_id: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -257,29 +296,23 @@ async def verify_webhook_signature(
         raise AuthenticationError(f"Missing {CANONICAL_SIGNATURE_HEADER} header")
     
     try:
-        # Try JWT verification first (most common for Clockify)
-        try:
-            payload = await verify_jwt_token_rs256(
-                clockify_signature,
-                expected_workspace_id=workspace_id
-            )
-            
-            logger.info(
-                "webhook_signature_verified_jwt",
-                workspace_id=payload.get("workspaceId")
-            )
-            
-            return payload
-            
-        except AuthenticationError:
-            # Fall back to HMAC verification if JWT fails
-            # This would require a shared webhook secret
-            logger.warning("jwt_verification_failed_trying_hmac")
-            
-            # TODO: Implement HMAC-SHA256 verification
-            # For now, in production mode without JWT, we fail secure
-            raise AuthenticationError("Webhook signature verification failed")
-        
+        jwt_claims = await verify_jwt_token_rs256(
+            clockify_signature,
+            expected_workspace_id=workspace_id
+        )
+
+        logger.info(
+            "webhook_signature_verified_jwt",
+            workspace_id=jwt_claims.get("workspaceId")
+        )
+
+        return jwt_claims
+
+    except AuthenticationError as err:
+        logger.warning("jwt_verification_failed_trying_hmac", error=str(err))
+        if settings.webhook_hmac_secret:
+            return _verify_hmac_signature(body, clockify_signature, workspace_id)
+        raise
     except Exception as e:
         logger.error("webhook_signature_verification_failed", error=str(e))
-        raise AuthenticationError(f"Webhook signature verification failed: {str(e)}")
+        raise AuthenticationError(f"Webhook signature verification failed: {str(e)}") from e

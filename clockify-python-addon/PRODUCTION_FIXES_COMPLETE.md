@@ -502,4 +502,9 @@ The January 2025 pass added four more production-facing improvements on top of t
 - `app/config.Settings` validates critical env vars (base URL, addon key, DB URL, allowed domains, webhook retry knobs) at import time so misconfigured deployments fail fast.
 - Added FastAPI TestClient coverage in `tests/test_integration_app.py`, along with config validators in `tests/test_config.py`, ensuring `/health`, `/ready`, `/metrics`, `/manifest`, and `/ui/api-explorer/execute` behave end-to-end.
 
+### Fix 14: HMAC Fallback & Spec-Driven Webhook Coverage
+- Introduced the `WEBHOOK_HMAC_SECRET` setting and enhanced `verify_webhook_signature` so JWT validation still runs first but can fall back to HMAC-SHA256 when Clockify delivers shared-secret signatures.
+- Expanded `tests/test_security.py` with real workspace/addon mismatch assertions plus positive/negative HMAC cases to verify the new guardrails.
+- Added spec-alignment tests in `tests/test_manifest.py` (comparing against `manifest.universal-webhook.json`) and new router coverage for events like `TIME_OFF_REQUESTED`/`BALANCE_UPDATED` in `tests/test_webhooks.py`, ensuring “all events” truly means all.
+
 **Result:** Security + functionality remained intact while the manifest, bootstrap, observability, and no-code Explorer now match the specification exactly.

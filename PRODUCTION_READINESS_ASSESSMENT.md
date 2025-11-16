@@ -9,14 +9,14 @@
 
 ## Executive Summary
 
-- ✅ **Security** – RS256 + JWKS verification with strict claim enforcement (`iss`, `sub`, `type`, `workspaceId`, `addonId`) protects lifecycle + webhook traffic. Canonical `Clockify-Signature` headers with legacy fallbacks are enforced everywhere.
+- ✅ **Security** – RS256 + JWKS verification with strict claim enforcement (`iss`, `sub`, `type`, `workspaceId`, `addonId`) protects lifecycle + webhook traffic. Canonical `Clockify-Signature` headers with legacy fallbacks are enforced everywhere, and a guarded `WEBHOOK_HMAC_SECRET` enables HMAC-SHA256 fallback verification when Clockify delivers shared-secret signatures.
 - ✅ **Webhooks** – Manifest parity (50/50 events), automatic registration on install, and cleanup on uninstall ensure Clockify never retains orphaned webhooks. Events are deduped (DB + memory) and logged per workspace.
 - ✅ **Universal Bootstrap** – Safe GET discovery parses `openapi.json`, bootstraps every workspace-scoped list endpoint, paginates until results drop below 50 (configurable guard via `BOOTSTRAP_MAX_PAGES`), and stores snapshots plus job progress.
 - ✅ **API Studio / Explorer** – `/api-call` plus `/ui/api-explorer/endpoints|execute` expose the entire Clockify API surface with OpenAPI validation, workspace parameter injection, domain allowlisting, and rate limiting. Static UI leverages these APIs.
 - ✅ **Operational Readiness** – `/health`, `/ready`, and `/metrics` endpoints exist; structured JSON logging includes `X-Request-ID`. Dockerfile is hardened, `.env.example` documents all settings, and ENV_VARS.md lists defaults (including the new pagination cap).
 - ✅ **Tests & Docs** – `PYTHONPATH=. pytest tests/ -v` → **49/49** passed, covering security, lifecycle, bootstrap, manifest parity, metrics, API explorer, middleware, webhook retries, config validation, and integration routes. All readiness docs and quick references were updated to reflect the current architecture.
 
-No blocker or high-priority items remain. Medium/low follow-ups (optional HMAC support, bootstrap restart controls, Explorer history, webhook re-registration UI) are explicitly documented for the next iteration.
+No blocker or high-priority items remain. Medium/low follow-ups (bootstrap restart controls, Explorer history, webhook re-registration UI) are explicitly documented for the next iteration.
 
 ---
 
@@ -91,10 +91,9 @@ rg -n "sub.*settings.addon_key" clockify-python-addon/app/token_verification.py
 ---
 
 ## Remaining Optional Work
-1. **Webhook HMAC support** – add optional shared-secret verification once Clockify exposes HMAC payloads. (MEDIUM)
-2. **Bootstrap controls** – expose restart/resume actions in the sidebar UI for admins. (LOW)
-3. **API explorer history** – show recently executed operations for quick replays. (LOW)
-4. **Webhook re-registration UI** – allow admins to re-run registration after rotating credentials. (LOW)
+1. **Bootstrap controls** – expose restart/resume actions in the sidebar UI for admins. (LOW)
+2. **API explorer history** – show recently executed operations for quick replays. (LOW)
+3. **Webhook re-registration UI** – allow admins to re-run registration after rotating credentials. (LOW)
 
 These items are tracked for future sprints and do not block marketplace submission.
 

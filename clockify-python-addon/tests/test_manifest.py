@@ -77,6 +77,24 @@ def test_doc_samples_match_canonical_event_list():
     assert sorted(doc_events) == sorted(CLOCKIFY_WEBHOOK_EVENTS)
 
 
+def test_repo_manifest_spec_covers_all_events():
+    """manifest.universal-webhook.json must include every webhook our addon expects."""
+    repo_root = Path(__file__).resolve().parents[3]
+    spec_path = repo_root / "manifest.universal-webhook.json"
+    spec_data = json.loads(spec_path.read_text())
+
+    spec_events = set()
+    for definition in spec_data.get("webhooks", []):
+        event_types = definition.get("eventTypes")
+        if event_types:
+            spec_events.update(event_types)
+        elif definition.get("event"):
+            spec_events.add(definition["event"])
+
+    assert spec_events, "Spec manifest should enumerate webhook events"
+    assert spec_events == set(CLOCKIFY_WEBHOOK_EVENTS)
+
+
 def test_scope_list_has_full_read_write_pairs():
     """Each requested scope must include both READ and WRITE variants."""
     resource_actions = {}

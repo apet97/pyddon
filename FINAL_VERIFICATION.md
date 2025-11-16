@@ -4,6 +4,7 @@
 **Status**: ✅ **ALL CHECKS PASSED**
 
 ## This Pass
+- Added optional HMAC-SHA256 fallback verification for webhooks (guarded by the new `WEBHOOK_HMAC_SECRET`) plus accompanying security tests so JWT failures can fall back to shared secrets without weakening the default posture.
 - Documented and enforced signature verification controls across API Studio, Universal Webhook, and the add-on. Tests now cover success + failure paths while the READMEs/ENV docs tell operators to keep the flags enabled in prod.
 - Hardened both rate limiters: monotonic timing via `asyncio.get_running_loop().time()`, new concurrency tests, warning logs, and Prometheus counters for throttled calls.
 - Produced a full environment inventory (`ENV_VARS.md`), removed unused `APP_PORT`/`UNIVERSAL_WEBHOOK_PORT`, clarified host allowlist formatting, and added Python/venv guidance (including the note about Python 3.14 wheel gaps).
@@ -222,7 +223,6 @@ gunicorn universal_webhook.main:app \
 ## Known Limitations
 
 ### Not Implemented (Optional Enhancements)
-- HMAC fallback verification once Clockify exposes webhook secrets (JWT validation is already enforced).
 - Generic HTTP flow actions (will light up when the UI/story is finalized).
 - API Explorer history/replay UX and richer UI polish.
 - Streaming/SSE progress feeds for bootstrap or long-running flows.

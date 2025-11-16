@@ -45,7 +45,6 @@
 
 | Priority | Item | Notes |
 |----------|------|-------|
-| MEDIUM | Webhook HMAC support | Add optional shared-secret verification once Clockify exposes webhook secrets. |
 | LOW | Bootstrap controls | Expose restart/resume actions inside the UI. |
 | LOW | API Explorer history | Show recently executed operations for quick replays. |
 | LOW | Webhook re-registration UI | Let admins re-run webhook registration after rotating credentials. |
