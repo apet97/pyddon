@@ -52,9 +52,6 @@ PYTHONPATH=. pytest tests/ -v --cov=api_studio
 Create a `.env` file (optional, defaults are provided):
 
 ```env
-# Server
-APP_PORT=8000
-
 # Clockify API
 CLOCKIFY_API_BASE_URL=https://api.clockify.me
 

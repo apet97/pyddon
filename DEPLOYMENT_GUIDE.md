@@ -55,9 +55,6 @@ Create `.env` file or set environment variables:
 
 #### API Studio
 ```bash
-# Server
-APP_PORT=8000
-
 # Database (PostgreSQL recommended)
 API_STUDIO_DB_URL=postgresql+asyncpg://username:password@db-host:5432/api_studio
 
@@ -75,9 +72,6 @@ API_STUDIO_FLOW_EXECUTION_RETENTION_DAYS=30
 
 #### Universal Webhook
 ```bash
-# Server
-UNIVERSAL_WEBHOOK_PORT=8001
-
 # Database (PostgreSQL recommended)
 UNIVERSAL_WEBHOOK_DB_URL=postgresql+asyncpg://username:password@db-host:5432/universal_webhook
 

@@ -6,7 +6,6 @@ from clockify_core.config import BaseClockifySettings
 class Settings(BaseClockifySettings):
     """API Studio specific settings."""
     
-    app_port: int = Field(default=8000, alias="APP_PORT")
     db_url: str = Field(default="sqlite+aiosqlite:///./api_studio.db", alias="API_STUDIO_DB_URL")
     addon_key: str = Field(default="clockify-api-studio", alias="API_STUDIO_ADDON_KEY")
     require_signature_verification: bool = Field(

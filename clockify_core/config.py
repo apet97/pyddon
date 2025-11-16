@@ -8,7 +8,7 @@ class BaseClockifySettings(BaseSettings):
     
     clockify_api_base_url: str = Field(
         default="https://api.clockify.me",
-        description="Base URL for Clockify API"
+        description="Reserved for future multi-host bootstrap overrides"
     )
     log_level: str = Field(
         default="INFO",

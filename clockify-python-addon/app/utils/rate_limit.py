@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import asyncio
-import time
-from typing import Optional
 from collections import defaultdict
+from typing import Optional
+
 from app.config import get_settings
-from app.utils.logger import get_logger
+from app.metrics import metrics_registry
 from app.utils.errors import RateLimitError
+from app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -15,10 +18,14 @@ class RateLimiter:
     
     def __init__(self, rps: int = 50):
         self.rps = max(1, rps)
-        self._buckets: dict = defaultdict(
-            lambda: {"tokens": float(self.rps), "last_update": time.time()}
+        self._buckets: dict[str, dict[str, Optional[float]]] = defaultdict(
+            self._create_bucket
         )
         self._lock = asyncio.Lock()
+    
+    def _create_bucket(self) -> dict[str, Optional[float]]:
+        """Create a new workspace bucket with a full token balance."""
+        return {"tokens": float(self.rps), "last_update": None}
     
     async def acquire(self, workspace_id: str) -> None:
         """Acquire a token for the given workspace, blocking if necessary."""
@@ -35,13 +42,18 @@ class RateLimiter:
                     return
                 
                 wait_time = (1 - bucket["tokens"]) / self.rps
-                wait_time = max(wait_time, 0)
+                wait_time = max(wait_time, 0.0)
+            
+            if wait_time <= 0:
+                # Re-check immediately if timing drift made the wait negative/zero
+                continue
             
             logger.warning(
                 "rate_limit_wait",
                 workspace_id=workspace_id,
                 wait_time=wait_time
             )
+            metrics_registry.record_rate_limit_wait(wait_time)
             await asyncio.sleep(wait_time)
     
     async def check_limit(self, workspace_id: str, raise_error: bool = True) -> bool:
@@ -64,14 +76,18 @@ class RateLimiter:
             
             return True
 
-    def _refill(self, bucket: dict) -> None:
+    def _refill(self, bucket: dict[str, Optional[float]]) -> None:
         """Replenish tokens in a bucket based on elapsed time."""
-        now = time.time()
-        time_passed = now - bucket["last_update"]
+        loop_time = asyncio.get_running_loop().time()
+        last_update = bucket["last_update"]
+        if last_update is None:
+            bucket["last_update"] = loop_time
+            return
+        time_passed = loop_time - last_update
         if time_passed <= 0:
             return
         bucket["tokens"] = min(self.rps, bucket["tokens"] + time_passed * self.rps)
-        bucket["last_update"] = now
+        bucket["last_update"] = loop_time
 
 
 # Global rate limiter instance

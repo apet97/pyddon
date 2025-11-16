@@ -44,14 +44,12 @@ async def test_jwt_verification_missing_kid():
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_signature_developer_mode():
-    """Test lifecycle signature bypasses verification in developer mode."""
+async def test_lifecycle_signature_disabled_flag():
+    """Lifecycle signature verification bypasses only when explicitly disabled."""
     with patch("app.token_verification.settings") as mock_settings:
         mock_settings.require_signature_verification = False
-        mock_settings.is_development = True
         mock_settings.addon_key = "test-addon"
         
-        # Should return without verification
         result = await verify_lifecycle_signature(
             b"test body",
             "fake-signature",
@@ -68,7 +66,6 @@ async def test_lifecycle_signature_missing_header():
     """Test lifecycle signature fails when header is missing."""
     with patch("app.token_verification.settings") as mock_settings:
         mock_settings.require_signature_verification = True
-        mock_settings.is_development = False
         
         with pytest.raises(AuthenticationError, match="Missing Clockify-Signature"):
             await verify_lifecycle_signature(
@@ -79,13 +76,11 @@ async def test_lifecycle_signature_missing_header():
 
 
 @pytest.mark.asyncio
-async def test_webhook_signature_developer_mode():
-    """Test webhook signature bypasses verification in developer mode."""
+async def test_webhook_signature_disabled_flag():
+    """Webhook signature verification bypasses only when explicitly disabled."""
     with patch("app.token_verification.settings") as mock_settings:
         mock_settings.require_signature_verification = False
-        mock_settings.is_development = True
         
-        # Should return without verification
         result = await verify_webhook_signature(
             b"test body",
             "fake-signature",
@@ -100,7 +95,6 @@ async def test_webhook_signature_missing_header():
     """Test webhook signature fails when header is missing."""
     with patch("app.token_verification.settings") as mock_settings:
         mock_settings.require_signature_verification = True
-        mock_settings.is_development = False
         
         with pytest.raises(AuthenticationError, match="Missing Clockify-Signature"):
             await verify_webhook_signature(
@@ -110,8 +104,8 @@ async def test_webhook_signature_missing_header():
             )
 
 
-def test_developer_mode_clear_warnings(caplog):
-    """Test that developer mode produces clear warning logs."""
+def test_signature_disabled_logs_warning(caplog, capsys):
+    """Disabling verification should emit a clear warning."""
     import logging
     caplog.set_level(logging.WARNING)
     
@@ -127,8 +121,8 @@ def test_developer_mode_clear_warnings(caplog):
         except:
             pass  # May fail to decode, but should log warning
         
-        # Check for developer mode warning in logs
-        # (This test verifies logging behavior)
+        stdout = capsys.readouterr().out
+        assert "jwt_verification_disabled_or_dev_mode" in stdout
 
 
 @pytest.mark.asyncio

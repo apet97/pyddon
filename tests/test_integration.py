@@ -101,6 +101,83 @@ def test_webhook_receiver_missing_workspace():
     assert "workspaceId" in data["message"]
 
 
+def test_webhook_requires_signature_when_enforced():
+    """Clockify webhook endpoint rejects unsigned requests when enforcement is on."""
+    original = api_settings.require_signature_verification
+    api_settings.require_signature_verification = True
+    try:
+        payload = {"workspaceId": "ws-secure-webhook", "eventType": "TIME_ENTRY_CREATED"}
+        response = client.post("/webhooks/clockify", json=payload)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing Clockify-Signature header"
+    finally:
+        api_settings.require_signature_verification = original
+
+
+def test_webhook_accepts_signature_when_enforced(monkeypatch):
+    """Clockify webhook endpoint proceeds when signature passes validation."""
+    original = api_settings.require_signature_verification
+    api_settings.require_signature_verification = True
+    monkeypatch.setattr(
+        "api_studio.webhooks.verify_webhook_signature",
+        lambda signature, addon_key, workspace_id: {"workspaceId": workspace_id},
+    )
+    try:
+        payload = {"workspaceId": "ws-signed-webhook", "eventType": "TIME_ENTRY_CREATED"}
+        headers = {"Clockify-Signature": "fake-token"}
+        response = client.post("/webhooks/clockify", json=payload, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["status"] in {"received", "error"}
+    finally:
+        api_settings.require_signature_verification = original
+
+
+def test_lifecycle_requires_signature_when_enforced():
+    """Lifecycle install endpoint requires a Clockify-Signature header."""
+    original = api_settings.require_signature_verification
+    api_settings.require_signature_verification = True
+    try:
+        payload = {
+            "addonId": "test-addon",
+            "authToken": "test-token-123",
+            "workspaceId": "ws-secure-lifecycle",
+            "apiUrl": "https://api.clockify.me",
+            "settings": {},
+        }
+        response = client.post("/lifecycle/installed", json=payload)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing Clockify-Signature header"
+    finally:
+        api_settings.require_signature_verification = original
+
+
+def test_lifecycle_accepts_signature_when_enforced(monkeypatch):
+    """Lifecycle install endpoint proceeds when signature validation succeeds."""
+    original = api_settings.require_signature_verification
+    api_settings.require_signature_verification = True
+
+    payload = {
+        "addonId": "test-addon",
+        "authToken": "test-token-123",
+        "workspaceId": "ws-signed-lifecycle",
+        "apiUrl": "https://api.clockify.me",
+        "settings": {},
+    }
+
+    def _fake_verify(signature, addon_key, workspace_id):
+        return {"workspaceId": workspace_id, "addonId": addon_key}
+
+    monkeypatch.setattr("api_studio.lifecycle.verify_lifecycle_signature", _fake_verify)
+
+    try:
+        headers = {"Clockify-Signature": "fake-token"}
+        response = client.post("/lifecycle/installed", json=payload, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+    finally:
+        api_settings.require_signature_verification = original
+
+
 def test_openapi_loader():
     """Test that OpenAPI loader can load and parse the spec."""
     from api_studio.openapi_loader import load_openapi, list_safe_get_operations, list_all_operations

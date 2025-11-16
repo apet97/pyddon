@@ -2,9 +2,6 @@
 
 ## Environment Variables
 
-### Server
-- **APP_PORT**: Port to run FastAPI on (default: 8000)
-
 ### Database
 - **API_STUDIO_DB_URL**: Database URL for SQLAlchemy
   - Default: `sqlite+aiosqlite:///./api_studio.db`
@@ -54,6 +51,7 @@ and used to configure the Clockify client per workspace.
 
 ## Security Notes
 
+- `API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION` (default `true`) enforces the canonical `Clockify-Signature` header for `/lifecycle/*` and `/webhooks/clockify`. Only flip it off for unit/integration tests or when running the API locally without Clockify callbacks.
 - Never log `X-Addon-Token` or `addon_token` values
 - All logs automatically redact sensitive data
 - HTTP client restricted to approved Clockify hosts only

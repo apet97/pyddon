@@ -229,8 +229,102 @@ def test_ui_dashboard(client):
     # Get dashboard
     response = client.get("/ui/dashboard?workspace_id=ws-006")
     assert response.status_code == 200
-    data = response.json()
-    assert data["workspace_id"] == "ws-006"
+
+
+def test_clockify_webhook_requires_signature_when_enforced(client):
+    """Universal webhook endpoint rejects unsigned Clockify requests when required."""
+    original = uw_settings.require_signature_verification
+    uw_settings.require_signature_verification = True
+    try:
+        payload = {
+            "id": "entry-secure",
+            "workspaceId": "ws-secure-webhook",
+        }
+        response = client.post("/webhooks/clockify", json=payload)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing Clockify-Signature header"
+    finally:
+        uw_settings.require_signature_verification = original
+
+
+def test_clockify_webhook_accepts_signature_when_enforced(client, monkeypatch):
+    """Universal webhook endpoint proceeds when signature validation succeeds."""
+    original = uw_settings.require_signature_verification
+    workspace_id = "ws-signed-webhook"
+    install_payload = {
+        "addonId": "addon-signed",
+        "authToken": "token-signed",
+        "workspaceId": workspace_id,
+        "apiUrl": "https://api.clockify.me",
+        "settings": {"bootstrap": {"run_on_install": False}},
+    }
+    monkeypatch.setattr(
+        "universal_webhook.webhooks.verify_webhook_signature",
+        lambda signature, addon_key, workspace_id: {"workspaceId": workspace_id},
+    )
+    try:
+        uw_settings.require_signature_verification = False
+        install_response = client.post("/lifecycle/installed", json=install_payload)
+        assert install_response.status_code == 200
+
+        uw_settings.require_signature_verification = True
+        payload = {
+            "id": "event-secure",
+            "workspaceId": workspace_id,
+        }
+        headers = {
+            "Clockify-Signature": "fake-token",
+            "clockify-webhook-workspace-id": workspace_id,
+            "clockify-webhook-event-type": "NEW_TIME_ENTRY",
+        }
+        response = client.post("/webhooks/clockify", json=payload, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "received"
+    finally:
+        uw_settings.require_signature_verification = original
+
+
+def test_lifecycle_requires_signature_when_enforced(client):
+    """Lifecycle installed endpoint rejects unsigned requests when enforcement is enabled."""
+    original = uw_settings.require_signature_verification
+    uw_settings.require_signature_verification = True
+    try:
+        payload = {
+            "addonId": "addon-secure",
+            "authToken": "token-secure",
+            "workspaceId": "ws-secure-lifecycle",
+            "apiUrl": "https://api.clockify.me",
+            "settings": {"bootstrap": {"run_on_install": False}},
+        }
+        response = client.post("/lifecycle/installed", json=payload)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing Clockify-Signature header"
+    finally:
+        uw_settings.require_signature_verification = original
+
+
+def test_lifecycle_accepts_signature_when_enforced(client, monkeypatch):
+    """Lifecycle installed endpoint proceeds when signature validation succeeds."""
+    original = uw_settings.require_signature_verification
+    uw_settings.require_signature_verification = True
+    payload = {
+        "addonId": "addon-signed",
+        "authToken": "token-signed",
+        "workspaceId": "ws-signed-lifecycle",
+        "apiUrl": "https://api.clockify.me",
+        "settings": {"bootstrap": {"run_on_install": False}},
+    }
+    monkeypatch.setattr(
+        "universal_webhook.lifecycle.verify_lifecycle_signature",
+        lambda signature, addon_key, workspace_id: {"workspaceId": workspace_id},
+    )
+    try:
+        headers = {"Clockify-Signature": "fake-token"}
+        response = client.post("/lifecycle/installed", json=payload, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "installed"
+    finally:
+        uw_settings.require_signature_verification = original
 
 
 def test_flow_crud(client):

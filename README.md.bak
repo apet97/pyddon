@@ -201,7 +201,6 @@ clockify-api-studio-py-kit/
 API_STUDIO_DB_URL=sqlite+aiosqlite:///./api_studio.db
 API_STUDIO_BOOTSTRAP_MAX_RPS=25
 API_STUDIO_BOOTSTRAP_INCLUDE_HEAVY_ENDPOINTS=false
-APP_PORT=8000
 LOG_LEVEL=INFO
 CLOCKIFY_API_BASE_URL=https://api.clockify.me
 ```
@@ -209,7 +208,6 @@ CLOCKIFY_API_BASE_URL=https://api.clockify.me
 #### Universal Webhook
 ```bash
 UNIVERSAL_WEBHOOK_DB_URL=sqlite+aiosqlite:///./universal_webhook.db
-UNIVERSAL_WEBHOOK_PORT=8001
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
 UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES=false

@@ -19,6 +19,8 @@ class MetricsRegistry:
         with self._lock:
             self.api_calls_total = 0
             self.api_calls_failed = 0
+            self.rate_limit_events = 0
+            self.rate_limit_wait_seconds = 0.0
             self.webhook_events_total = 0
             self.webhook_events_by_type: Dict[str, int] = defaultdict(int)
             self.lifecycle_events_total: Dict[str, int] = defaultdict(int)
@@ -39,6 +41,12 @@ class MetricsRegistry:
         with self._lock:
             self.webhook_events_total += 1
             self.webhook_events_by_type[normalized] += 1
+
+    def record_rate_limit_wait(self, wait_time: float) -> None:
+        """Record that a request waited due to rate limiting."""
+        with self._lock:
+            self.rate_limit_events += 1
+            self.rate_limit_wait_seconds += max(wait_time, 0.0)
 
     def record_lifecycle_event(self, event: str, success: bool = True) -> None:
         """Record lifecycle callbacks such as install/uninstall."""
@@ -65,6 +73,12 @@ class MetricsRegistry:
                 "# HELP clockify_api_calls_failed_total Clockify API calls that returned an error",
                 "# TYPE clockify_api_calls_failed_total counter",
                 f"clockify_api_calls_failed_total {self.api_calls_failed}",
+                "# HELP clockify_rate_limit_events_total Requests delayed by the addon rate limiter",
+                "# TYPE clockify_rate_limit_events_total counter",
+                f"clockify_rate_limit_events_total {self.rate_limit_events}",
+                "# HELP clockify_rate_limit_wait_seconds_total Total seconds spent waiting for rate limiter tokens",
+                "# TYPE clockify_rate_limit_wait_seconds_total counter",
+                f"clockify_rate_limit_wait_seconds_total {self.rate_limit_wait_seconds}",
                 "# HELP clockify_webhook_events_total Clockify webhook events accepted by the addon",
                 "# TYPE clockify_webhook_events_total counter",
                 f"clockify_webhook_events_total {self.webhook_events_total}",

@@ -10,6 +10,7 @@ Production-ready Clockify add-ons implemented in Python with comprehensive secur
 - **[Executive Summary](EXECUTIVE_SUMMARY.md)** - Business-level overview
 - **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step production deployment
 - **[Security & Limits](docs/SECURITY_AND_LIMITS_API_STUDIO_PY.md)** - Detailed security posture
+- **[Environment Variables](ENV_VARS.md)** - Signature enforcement + config knobs per service
 
 ## 📦 What's Included
 
@@ -36,6 +37,7 @@ This repository contains two Clockify add-ons plus shared infrastructure:
   - No-code flow engine
   - API Explorer (safe GET operations)
   - JSON UI endpoints
+  - Signature enforcement via `API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION` (default `true`). Keep enabled in production/staging; only disable in local testing environments because unsigned Clockify traffic is rejected otherwise.
 
 ### 2. Universal Webhook (`universal_webhook/`) ⭐
 **Enterprise-grade automation platform**
@@ -52,6 +54,7 @@ This repository contains two Clockify add-ons plus shared infrastructure:
   - Production-ready observability
   - Canonical manifest alignment via `clockify-python-addon/app/constants.py` ensuring every supported event/path and the full `CLOCKIFY_SCOPE_LIST` stay in sync between router, generated manifest, and `manifest.json`
   - Hardened security (workspace isolation, RS256 + JWKS verification, allowed domain enforcement, payload size limits, and per-workspace token-bucket rate limiting)
+  - Signature enforcement via `UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION` (default `true`). This must remain enabled outside of tests; disabling it is a local-only escape hatch that bypasses Clockify's `Clockify-Signature` verification.
 
 ---
 
@@ -119,6 +122,28 @@ uvicorn universal_webhook.main:app --reload --port 8001
 curl http://localhost:8001/healthz
 # {"status":"ok","service":"universal-webhook"}
 ```
+
+---
+
+## 🐍 Python & Testing
+
+- **Supported Python**: The repo targets Python **3.11**. Python 3.12 works but is not part of the regression matrix yet. Python 3.14 (and newer) is still experimental because several dependencies (e.g., `uvloop`, `orjson`) do not publish official wheels—stick to 3.11 in production builds.
+- **Root venv + tests**:
+  ```bash
+  python3.11 -m venv venv
+  source venv/bin/activate
+  pip install -e .
+  ./venv/bin/python -m pytest tests -v
+  ```
+- **Add-on venv + tests**:
+  ```bash
+  cd clockify-python-addon
+  python3.11 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+  ./venv/bin/python -m pytest tests -v
+  ```
+- Remember to deactivate each venv (`deactivate`) before switching between the root services and the add-on to avoid path confusion.
 
 ---
 
@@ -219,7 +244,6 @@ API_STUDIO_BOOTSTRAP_MAX_RPS=25
 API_STUDIO_BOOTSTRAP_INCLUDE_HEAVY_ENDPOINTS=false
 API_STUDIO_WEBHOOK_LOG_RETENTION_DAYS=90
 API_STUDIO_FLOW_EXECUTION_RETENTION_DAYS=30
-APP_PORT=8000
 LOG_LEVEL=INFO
 CLOCKIFY_API_BASE_URL=https://api.clockify.me
 ```
@@ -227,7 +251,6 @@ CLOCKIFY_API_BASE_URL=https://api.clockify.me
 #### Universal Webhook
 ```bash
 UNIVERSAL_WEBHOOK_DB_URL=sqlite+aiosqlite:///./universal_webhook.db
-UNIVERSAL_WEBHOOK_PORT=8001
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
 UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES=false

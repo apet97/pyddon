@@ -25,8 +25,8 @@ Production-ready Clockify Add-on implementation in Python 3.11+ with FastAPI, fe
 
 ### Security & Guardrails
 
-- RS256 + JWKS validation (with strict `iss`, `sub`, and `workspaceId` claims) plus a developer bypass toggle for local testing.
-- Allowed-domain enforcement for outbound API calls via `Settings.allowed_api_domains`.
+- RS256 + JWKS validation (with strict `iss`, `sub`, and `workspaceId` claims). `REQUIRE_SIGNATURE_VERIFICATION` defaults to `true` and **must remain enabled** in production/staging; flip it to `false` only for local development or automated tests when you cannot generate real Clockify signatures.
+- Allowed-domain enforcement for outbound API calls via `CLOCKIFY_ALLOWED_API_DOMAINS` (comma-separated hosts, e.g. `*.clockify.me,api.clockify.com`).
 - Per-workspace token-bucket rate limiter (50 RPS) and configurable webhook/API payload size caps block runaway jobs.
 - Pervasive workspace isolation (DB queries, cache keys, bootstrap jobs) so data never crosses tenants.
 
@@ -159,6 +159,35 @@ Secure request validation:
 - Clockify signature validation
 - Developer mode bypass for testing
 - Workspace and addon ID validation
+
+## Data Model
+
+All runtime state lives in SQLite (dev) or Postgres (prod) via `app/db/models.py`:
+
+- **`installations`** – one row per workspace, storing addon token, API base, settings, and registered webhook IDs (for deregistration).
+- **`webhook_events`** – immutable ledger of every Clockify webhook payload plus metadata (workspace ID, dedupe event ID).
+- **`api_calls`** – audit trail of "Any API Call" requests (endpoint, parameters, response status, duration).
+- **`bootstrap_jobs`** – progress tracker for long-running bootstrap runs (counts, errors, timing).
+- **`workspace_data`** – cached GET responses pulled during bootstrap for the API Explorer UI.
+
+All tables include a `workspace_id` column and the query layer always scopes by workspace.
+
+## Permissions & Manifest Coverage
+
+The add-on requests all read/write scopes and subscribes to every Clockify webhook event. Canonical lists live in `app/constants.py` and are used by:
+
+- `app/webhook_router.py` (routing per event path)
+- `app/manifest.py` + `manifest.json` (generated + static manifests)
+- Tests (`tests/test_manifest.py`) that diff the router, generated manifest, and JSON manifest to prevent drift.
+
+Any change to the constants automatically cascades through the manifest generator and router, and the tests fail if an event or scope drifts out of sync.
+
+## Operations
+
+- **Environment variables** – see [`clockify-python-addon/ENV_VARS.md`](ENV_VARS.md) for every knob (signature flags, JWKS hosts, rate limiting, etc.).
+- **Local run** – follow the Quick Start above or use the repo-level instructions to create `./venv`, install dependencies with `pip install -r requirements.txt`, and start `uvicorn app.main:app --reload`.
+- **Docker** – `docker build -t clockify-addon .` then `docker run -p 8000:8000 --env-file .env clockify-addon`. A `docker-compose.yml` is included for local Postgres/Redis stacks.
+- **Health / readiness / metrics** – the service exposes `GET /health`, `GET /ready`, and `GET /metrics` (Prometheus exposition). All endpoints include workspace-aware logging so on-call responders can trace traffic quickly.
 
 ## Configuration
 

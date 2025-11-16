@@ -7,7 +7,6 @@ from clockify_core.config import BaseClockifySettings
 class Settings(BaseClockifySettings):
     """Universal Webhook specific settings."""
     
-    app_port: int = Field(default=8001, alias="UNIVERSAL_WEBHOOK_PORT")
     db_url: str = Field(
         default="sqlite+aiosqlite:///./universal_webhook.db",
         alias="UNIVERSAL_WEBHOOK_DB_URL"

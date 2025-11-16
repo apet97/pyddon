@@ -158,9 +158,6 @@ All tables prefixed with `universal_webhook_*`:
 # Database
 UNIVERSAL_WEBHOOK_DB_URL=sqlite+aiosqlite:///./universal_webhook.db
 
-# Server
-UNIVERSAL_WEBHOOK_PORT=8001
-
 # Bootstrap
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
@@ -182,6 +179,8 @@ UW_CACHE_TTL_DAYS=7
 # Logging
 LOG_LEVEL=INFO
 ```
+
+> `UW_ENABLE_GENERIC_HTTP_ACTIONS` is currently reserved for future outbound HTTP action support; toggling it has no effect yet.
 
 ### Manifest Settings (Override Environment)
 

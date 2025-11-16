@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from .models import Installation
 from .openapi_loader import get_operation_by_id, list_all_operations
 
 router = APIRouter(prefix="/ui/api-explorer", tags=["api-explorer"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/endpoints")
@@ -77,6 +80,14 @@ async def execute_endpoint(
     if not op_info:
         raise HTTPException(status_code=400, detail=f"Operation {request.operation_id} not found")
     
+    logger.info(
+        "api_explorer_execute",
+        workspace_id=request.workspace_id,
+        operation_id=request.operation_id,
+        method=op_info["method"],
+        path=op_info["path"],
+    )
+    
     # Build path with parameters
     path = op_info["path"]
     for param_name, param_value in request.path_params.items():
@@ -125,4 +136,10 @@ async def execute_endpoint(
         }
     
     except Exception as e:
+        logger.error(
+            "api_explorer_execute_failed",
+            workspace_id=request.workspace_id,
+            operation_id=request.operation_id,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"API call failed: {str(e)}")

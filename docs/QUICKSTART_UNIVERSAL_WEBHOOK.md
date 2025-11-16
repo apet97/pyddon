@@ -10,6 +10,8 @@
 - Git
 - Virtual environment (venv)
 
+> 🔐 Signature verification is controlled by the `UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION` env var (default `true`). Leave it enabled in every non-test environment; disabling it is for local experiments only and will force the app to bypass `Clockify-Signature` validation.
+
 ---
 
 ## 1. Setup
@@ -327,9 +329,6 @@ Create `.env` file:
 # Database
 UNIVERSAL_WEBHOOK_DB_URL=sqlite+aiosqlite:///./universal_webhook.db
 
-# Server
-UNIVERSAL_WEBHOOK_PORT=8001
-
 # Bootstrap
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
@@ -352,6 +351,8 @@ UW_CACHE_TTL_DAYS=7
 LOG_LEVEL=INFO
 CLOCKIFY_API_BASE_URL=https://api.clockify.me
 ```
+
+> `UW_ENABLE_GENERIC_HTTP_ACTIONS` is reserved for upcoming generic HTTP flow actions. Leave it set to `false`; flipping it currently has no effect.
 
 ### Override via Manifest Settings
 

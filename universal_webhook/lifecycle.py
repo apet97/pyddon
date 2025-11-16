@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -16,6 +17,7 @@ from .models import BootstrapState, Installation
 from clockify_core import SecurityError, verify_lifecycle_signature
 
 router = APIRouter(prefix="/lifecycle", tags=["lifecycle"])
+logger = logging.getLogger(__name__)
 
 
 class InstallPayload(BaseModel):
@@ -51,6 +53,11 @@ async def installed(
     - Optionally triggers background bootstrap job
     """
     _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+    logger.info(
+        "uw_lifecycle_installed",
+        workspace_id=payload.workspaceId,
+        addon_id=payload.addonId,
+    )
 
     # Check if installation already exists
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
@@ -137,6 +144,7 @@ async def uninstalled(
     Marks installation as inactive (soft delete).
     """
     _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+    logger.info("uw_lifecycle_uninstalled", workspace_id=payload.workspaceId)
 
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
     result = await session.execute(stmt)
@@ -165,6 +173,7 @@ async def settings_updated(
     Updates installation settings and can trigger actions based on new settings.
     """
     _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+    logger.info("uw_lifecycle_settings_updated", workspace_id=payload.workspaceId)
 
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
     result = await session.execute(stmt)

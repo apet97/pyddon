@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -25,3 +26,16 @@ async def test_rate_limiter_check_limit_flags_exhausted_bucket():
     assert available is False
     with pytest.raises(RateLimitError):
         await limiter.check_limit("workspace-2", raise_error=True)
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_serializes_concurrent_requests():
+    limiter = RateLimiter(rps=2)
+
+    async def _consume():
+        await limiter.acquire("workspace-3")
+
+    start = time.perf_counter()
+    await asyncio.gather(*(_consume() for _ in range(3)))
+    elapsed = time.perf_counter() - start
+    assert elapsed >= 0.5

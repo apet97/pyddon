@@ -208,7 +208,7 @@ async def verify_lifecycle_signature(
     """
     
     # Developer mode bypass
-    if not settings.require_signature_verification or settings.is_development:
+    if not settings.require_signature_verification:
         logger.warning("lifecycle_signature_verification_disabled")
         return {"workspaceId": workspace_id or "dev-workspace", "addonId": addon_id or settings.addon_key}
     
@@ -249,7 +249,7 @@ async def verify_webhook_signature(
     """
     
     # Developer mode bypass
-    if not settings.require_signature_verification or settings.is_development:
+    if not settings.require_signature_verification:
         logger.warning("webhook_signature_verification_disabled")
         return {"workspaceId": workspace_id or "dev-workspace"}
     

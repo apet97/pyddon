@@ -48,12 +48,26 @@ This document lists all environment variables used by the Clockify Python Addon.
 - **Example**: `https://developer.clockify.me/.well-known/jwks.json`
 - **Note**: Only set when pointing at a custom Clockify environment
 
+### `CLOCKIFY_JWKS_PROD_URL`
+- **Description**: Override the default production JWKS host
+- **Required**: No
+- **Default**: `https://api.clockify.me/.well-known/jwks.json`
+- **Example**: `https://api.clockify.me/.well-known/jwks.json`
+- **Note**: Rarely changed; useful only when Clockify provides a custom prod tenant.
+
+### `CLOCKIFY_JWKS_DEV_URL`
+- **Description**: Override the default developer/sandbox JWKS host
+- **Required**: No
+- **Default**: `https://developer.clockify.me/.well-known/jwks.json`
+- **Example**: `https://developer.clockify.me/.well-known/jwks.json`
+- **Note**: Use when pointing at bespoke sandbox deployments.
+
 ### `REQUIRE_SIGNATURE_VERIFICATION`
 - **Description**: Enable JWT/signature verification for lifecycle and webhook events
 - **Required**: No
 - **Default**: `true`
 - **Example**: `true` or `false`
-- **Note**: MUST be `true` in production; set to `false` only for local development
+- **Note**: MUST be `true` in production and staging. Only flip it to `false` for automated tests or local experiments, and never deploy with the flag disabled.
 
 ### `CLOCKIFY_ENVIRONMENT`
 - **Description**: Clockify environment hint used to auto-select JWKS (`prod` or `dev`)

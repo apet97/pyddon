@@ -17,6 +17,9 @@ from .db import get_session
 from .models import WebhookLog, FlowExecution
 from clockify_core import get_metrics_collector, run_retention_cleanup
 
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO)
+)
 logger = logging.getLogger(__name__)
 
 

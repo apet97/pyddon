@@ -1,6 +1,7 @@
 """API Explorer endpoints for Universal Webhook add-on."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +15,7 @@ from .db import get_db
 from .models import Installation
 
 router = APIRouter(prefix="/ui/api-explorer", tags=["api-explorer"])
+logger = logging.getLogger(__name__)
 
 
 class ExecuteRequest(BaseModel):
@@ -99,6 +101,14 @@ async def execute_operation(
             status_code=404,
             detail=f"Operation not found: {request.operation_id}"
         )
+    
+    logger.info(
+        "uw_api_explorer_execute",
+        workspace_id=workspace_id,
+        operation_id=request.operation_id,
+        method=operation["method"],
+        path=operation["path"],
+    )
 
     # Build request
     path = operation["path"]
@@ -152,6 +162,14 @@ async def execute_operation(
     
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
+        logger.error(
+            "uw_api_explorer_execute_failed",
+            workspace_id=workspace_id,
+            operation_id=request.operation_id,
+            method=method,
+            path=path,
+            error=str(e),
+        )
         return {
             "status": "error",
             "error": str(e),

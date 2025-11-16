@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+
+from .metrics import increment_counter
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
@@ -34,4 +39,12 @@ class RateLimiter:
                     self._next_allowed_time = now + self.min_interval
                     return
                 wait_time = self._next_allowed_time - now
+            if wait_time <= 0:
+                continue
+            increment_counter("rate_limiter.waits")
+            logger.debug(
+                "rate_limiter_wait",
+                wait_time=wait_time,
+                max_rps=self.max_rps,
+            )
             await asyncio.sleep(wait_time)
