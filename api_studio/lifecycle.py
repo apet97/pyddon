@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .db import get_session
 from .models import Installation, BootstrapState
 from .bootstrap import run_bootstrap_background_task
-from clockify_core import increment_counter
+from .config import settings
+from clockify_core import SecurityError, increment_counter, verify_lifecycle_signature
 
 router = APIRouter(prefix="/lifecycle", tags=["lifecycle"])
 logger = logging.getLogger(__name__)
@@ -76,7 +77,11 @@ class SettingsUpdatedPayload(BaseModel):
 
 
 @router.post("/installed")
-async def lifecycle_installed(payload: InstallationPayload, session: AsyncSession = Depends(get_session)) -> dict:
+async def lifecycle_installed(
+    payload: InstallationPayload,
+    session: AsyncSession = Depends(get_session),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
+) -> dict:
     """Handle Clockify add-on installation.
 
     - Upsert Installation row for workspaceId
@@ -90,6 +95,7 @@ async def lifecycle_installed(payload: InstallationPayload, session: AsyncSessio
     if not payload.workspace_id or not payload.auth_token or not payload.api_url:
         increment_counter("lifecycle.installed.errors.missing_fields")
         raise HTTPException(status_code=400, detail="Missing required fields: workspaceId, authToken, or apiUrl")
+    _verify_lifecycle_signature(clockify_signature, payload.workspace_id)
 
     logger.info(f"Installation request for workspace {payload.workspace_id}")
 
@@ -138,8 +144,8 @@ async def lifecycle_installed(payload: InstallationPayload, session: AsyncSessio
     await session.commit()
 
     # Check if we should run bootstrap automatically
-    settings = payload.settings or {}
-    bootstrap_on_install = settings.get("bootstrap_on_install", True)
+    payload_settings = payload.settings or {}
+    bootstrap_on_install = payload_settings.get("bootstrap_on_install", True)
 
     if bootstrap_on_install:
         logger.info(f"Triggering bootstrap for workspace {payload.workspace_id}")
@@ -155,7 +161,11 @@ async def lifecycle_installed(payload: InstallationPayload, session: AsyncSessio
 
 
 @router.post("/uninstalled")
-async def lifecycle_uninstalled(payload: UninstallationPayload, session: AsyncSession = Depends(get_session)) -> dict:
+async def lifecycle_uninstalled(
+    payload: UninstallationPayload,
+    session: AsyncSession = Depends(get_session),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
+) -> dict:
     """Handle Clockify add-on uninstallation.
 
     Mark installation inactive and optionally clean up data.
@@ -164,6 +174,7 @@ async def lifecycle_uninstalled(payload: UninstallationPayload, session: AsyncSe
     
     if not payload.workspace_id:
         raise HTTPException(status_code=400, detail="Missing required field: workspaceId")
+    _verify_lifecycle_signature(clockify_signature, payload.workspace_id)
 
     logger.info(f"Uninstallation request for workspace {payload.workspace_id}")
 
@@ -180,7 +191,11 @@ async def lifecycle_uninstalled(payload: UninstallationPayload, session: AsyncSe
 
 
 @router.post("/settings-updated")
-async def lifecycle_settings_updated(payload: SettingsUpdatedPayload, session: AsyncSession = Depends(get_session)) -> dict:
+async def lifecycle_settings_updated(
+    payload: SettingsUpdatedPayload,
+    session: AsyncSession = Depends(get_session),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
+) -> dict:
     """Handle structured settings updates from Clockify.
 
     Persist changes to Installation.settings_json and adjust behavior accordingly.
@@ -189,6 +204,7 @@ async def lifecycle_settings_updated(payload: SettingsUpdatedPayload, session: A
     
     if not payload.workspace_id:
         raise HTTPException(status_code=400, detail="Missing required field: workspaceId")
+    _verify_lifecycle_signature(clockify_signature, payload.workspace_id)
 
     logger.info(f"Settings update for workspace {payload.workspace_id}")
 
@@ -205,3 +221,17 @@ async def lifecycle_settings_updated(payload: SettingsUpdatedPayload, session: A
     logger.info(f"Settings updated for workspace {payload.workspace_id}")
 
     return {"status": "ok", "message": "Settings updated successfully"}
+
+
+def _verify_lifecycle_signature(signature: str | None, workspace_id: str | None) -> None:
+    """Verify lifecycle request signatures when enforcement is enabled."""
+    if not settings.require_signature_verification:
+        return
+    if not signature:
+        raise HTTPException(status_code=401, detail="Missing Clockify-Signature header")
+    if not workspace_id:
+        raise HTTPException(status_code=400, detail="Missing workspaceId for signature verification")
+    try:
+        verify_lifecycle_signature(signature, settings.addon_key, workspace_id)
+    except SecurityError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))

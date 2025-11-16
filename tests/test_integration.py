@@ -2,11 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from api_studio.config import settings as api_settings
 from api_studio.main import app
 from api_studio.db import async_session_maker
 from api_studio.models import Base, Installation, BootstrapState, Flow, WebhookLog
 
 
+api_settings.require_signature_verification = False
 client = TestClient(app)
 
 

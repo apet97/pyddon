@@ -179,7 +179,8 @@ All configuration is managed via environment variables (`.env` file):
 - `API_CALL_MAX_PAYLOAD_BYTES`: Maximum request body size for `/api-call` (default `1_048_576` bytes)
 - `WEBHOOK_MAX_PAYLOAD_BYTES`: Maximum webhook payload size (default `5_242_880` bytes)
 - `WEBHOOK_REQUEST_MAX_RETRIES`, `WEBHOOK_REQUEST_BACKOFF_BASE`, `WEBHOOK_REQUEST_BACKOFF_CAP`: Control exponential backoff for Clockify webhook HTTP calls
-- `JWT_SECRET`: Secret for internal JWT operations
+
+> RS256 + JWKS verification is mandatory in production. There is no HMAC fallback; use `CLOCKIFY_JWKS_URL` or `CLOCKIFY_ENVIRONMENT` to point at the correct Clockify JWKS host.
 
 **Signature headers**: All lifecycle and webhook routes expect the canonical `Clockify-Signature` header. Legacy headers (`X-Addon-Signature`, `X-Webhook-Signature`) are still accepted automatically for backwards compatibility.
 

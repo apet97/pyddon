@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./clockify_addon.db"
     
     # Security
-    jwt_secret: str = "your-jwt-secret-change-in-production"
     clockify_jwks_url: Optional[str] = None
     clockify_jwks_prod_url: str = "https://api.clockify.me/.well-known/jwks.json"
     clockify_jwks_dev_url: str = "https://developer.clockify.me/.well-known/jwks.json"
@@ -115,6 +114,13 @@ class Settings(BaseSettings):
         if env_hint in {"dev", "developer", "staging", "sandbox"}:
             return self.clockify_jwks_dev_url
         return self.clockify_jwks_prod_url
+
+    @field_validator("allowed_api_domains", mode="before")
+    @classmethod
+    def _coerce_allowed_domains(cls, value):
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
 
 
 @lru_cache()

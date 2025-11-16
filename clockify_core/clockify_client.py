@@ -85,7 +85,7 @@ class ClockifyClient:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(5),
             wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
-            retry=retry_if_exception_type(httpx.HTTPStatusError),
+            retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError)),
             reraise=True,
         ):
             with attempt:
@@ -98,6 +98,8 @@ class ClockifyClient:
                         raise httpx.HTTPStatusError(
                             "Rate limited", request=resp.request, response=resp
                         )
+                    if resp.status_code >= 500:
+                        resp.raise_for_status()
                     logger.debug(f"Clockify API response: {resp.status_code} for {method} {path}")
                     return resp
 

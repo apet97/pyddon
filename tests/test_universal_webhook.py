@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from universal_webhook.config import Settings
+from universal_webhook.config import Settings, settings as uw_settings
 from universal_webhook.db import get_db
 from universal_webhook.main import create_app
 from universal_webhook.models import (
@@ -524,3 +524,4 @@ async def test_run_bootstrap_marks_state_when_truncated(monkeypatch):
 
     assert state.status == "COMPLETE_WITH_WARNINGS"
     assert "page cap" in (state.last_error or "").lower()
+uw_settings.require_signature_verification = False

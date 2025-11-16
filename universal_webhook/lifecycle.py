@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from .bootstrap import run_bootstrap_background_task
 from .config import settings
 from .db import get_db
 from .models import BootstrapState, Installation
+from clockify_core import SecurityError, verify_lifecycle_signature
 
 router = APIRouter(prefix="/lifecycle", tags=["lifecycle"])
 
@@ -40,7 +41,8 @@ class SettingsUpdatedPayload(BaseModel):
 @router.post("/installed")
 async def installed(
     payload: InstallPayload,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
 ) -> Dict[str, str]:
     """Handle add-on installation for a workspace.
     
@@ -48,6 +50,8 @@ async def installed(
     - Initializes bootstrap state
     - Optionally triggers background bootstrap job
     """
+    _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+
     # Check if installation already exists
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
     result = await session.execute(stmt)
@@ -125,12 +129,15 @@ async def installed(
 @router.post("/uninstalled")
 async def uninstalled(
     payload: UninstallPayload,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
 ) -> Dict[str, str]:
     """Handle add-on uninstallation.
     
     Marks installation as inactive (soft delete).
     """
+    _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
     result = await session.execute(stmt)
     installation = result.scalar_one_or_none()
@@ -150,12 +157,15 @@ async def uninstalled(
 @router.post("/settings-updated")
 async def settings_updated(
     payload: SettingsUpdatedPayload,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
 ) -> Dict[str, str]:
     """Handle settings update for a workspace.
     
     Updates installation settings and can trigger actions based on new settings.
     """
+    _verify_lifecycle_signature(clockify_signature, payload.workspaceId)
+
     stmt = select(Installation).where(Installation.workspace_id == payload.workspaceId)
     result = await session.execute(stmt)
     installation = result.scalar_one_or_none()
@@ -170,3 +180,15 @@ async def settings_updated(
         "status": "settings_updated",
         "workspaceId": payload.workspaceId
     }
+
+
+def _verify_lifecycle_signature(signature: str | None, workspace_id: str) -> None:
+    """Verify lifecycle signatures when enforcement is enabled."""
+    if not settings.require_signature_verification:
+        return
+    if not signature:
+        raise HTTPException(status_code=401, detail="Missing Clockify-Signature header")
+    try:
+        verify_lifecycle_signature(signature, settings.addon_key, workspace_id)
+    except SecurityError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))

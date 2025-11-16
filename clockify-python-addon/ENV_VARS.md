@@ -41,13 +41,6 @@ This document lists all environment variables used by the Clockify Python Addon.
 
 ## Security
 
-### `JWT_SECRET`
-- **Description**: Secret key for internal JWT operations (if needed)
-- **Required**: No
-- **Default**: `your-jwt-secret-change-in-production`
-- **Example**: `a-very-long-random-secret-key-here`
-- **Note**: Generate a strong random secret for production
-
 ### `CLOCKIFY_JWKS_URL`
 - **Description**: Optional override for Clockify's JWKS endpoint (auto-selected when unset)
 - **Required**: No
@@ -74,7 +67,7 @@ This document lists all environment variables used by the Clockify Python Addon.
 - **Required**: No
 - **Default**: `*.clockify.me,*.clockify.com,developer.clockify.me,api.clockify.me,reports.api.clockify.me,pto.api.clockify.me`
 - **Example**: `*.clockify.me,internal.clockify.net`
-- **Note**: Requests to hosts outside this list are rejected with a validation error
+- **Note**: Requests to hosts outside this list are rejected with a validation error. Comma-separated strings are automatically parsed into a list.
 
 ### `API_CALL_MAX_PAYLOAD_BYTES`
 - **Description**: Maximum body size (in bytes) accepted by `/api-call`
@@ -273,10 +266,10 @@ AUTO_BOOTSTRAP_ON_INSTALL=false
 ## Security Best Practices
 
 1. **Never commit `.env` files to version control**
-2. **Use strong random secrets** for `JWT_SECRET`
+2. **Ensure the Clockify JWKS host (`CLOCKIFY_JWKS_URL` or `CLOCKIFY_ENVIRONMENT`) is reachable and correct**
 3. **Always enable signature verification** (`REQUIRE_SIGNATURE_VERIFICATION=true`) in production
 4. **Use PostgreSQL** instead of SQLite for production deployments
 5. **Enable Redis** for multi-instance deployments
 6. **Use HTTPS** for all production `BASE_URL` values
-7. **Rotate secrets regularly** in production environments
+7. **Rotate credentials (DB, Redis, addon token seeds) regularly**
 8. **Monitor logs** for authentication failures and suspicious activity

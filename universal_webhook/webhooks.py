@@ -9,7 +9,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clockify_core import ClockifyClient, increment_counter, redact_sensitive_data
+from clockify_core import (
+    ClockifyClient,
+    SecurityError,
+    increment_counter,
+    redact_sensitive_data,
+    verify_webhook_signature,
+)
 
 from .config import settings
 from .db import async_session_maker, get_db
@@ -26,6 +32,7 @@ async def receive_clockify_webhook(
     session: AsyncSession = Depends(get_db),
     clockify_webhook_event_type: str | None = Header(None),
     clockify_webhook_workspace_id: str | None = Header(None),
+    clockify_signature: str | None = Header(None, alias="Clockify-Signature"),
 ) -> Dict[str, str]:
     """Receive and log all Clockify webhook events.
     
@@ -54,6 +61,7 @@ async def receive_clockify_webhook(
             status_code=400,
             detail="Missing workspace ID in header or payload"
         )
+    _verify_webhook_signature(clockify_signature, workspace_id)
 
     # Verify installation exists and is active
     stmt = select(Installation).where(
@@ -258,3 +266,15 @@ async def _run_flow_evaluation(
                 workspace_id,
                 exc,
             )
+
+
+def _verify_webhook_signature(signature: str | None, workspace_id: str) -> None:
+    """Verify webhook signatures when enforcement is enabled."""
+    if not settings.require_signature_verification:
+        return
+    if not signature:
+        raise HTTPException(status_code=401, detail="Missing Clockify-Signature header")
+    try:
+        verify_webhook_signature(signature, settings.addon_key, workspace_id)
+    except SecurityError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))

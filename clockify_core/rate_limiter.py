@@ -18,17 +18,20 @@ class RateLimiter:
         """
         self.max_rps = max_rps
         self.min_interval = 1.0 / max_rps
-        self.last_request_time = 0.0
+        self._next_allowed_time = 0.0
+        self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
         """Wait if necessary to respect rate limit.
         
         This ensures that requests are spaced out by at least min_interval seconds.
         """
-        now = asyncio.get_event_loop().time()
-        time_since_last = now - self.last_request_time
-
-        if time_since_last < self.min_interval:
-            await asyncio.sleep(self.min_interval - time_since_last)
-
-        self.last_request_time = asyncio.get_event_loop().time()
+        loop = asyncio.get_running_loop()
+        while True:
+            async with self._lock:
+                now = loop.time()
+                if now >= self._next_allowed_time:
+                    self._next_allowed_time = now + self.min_interval
+                    return
+                wait_time = self._next_allowed_time - now
+            await asyncio.sleep(wait_time)

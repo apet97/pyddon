@@ -156,7 +156,7 @@ lsof -ti:8000 | xargs kill -9
 - [ ] Set `DEBUG=false`
 - [ ] Configure proper `BASE_URL` with HTTPS
 - [ ] Update `manifest.json` with production URLs
-- [ ] Set strong `JWT_SECRET`
+- [ ] Confirm `CLOCKIFY_JWKS_URL` (or `CLOCKIFY_ENVIRONMENT`) points to the correct Clockify JWKS host
 - [ ] Enable Redis (`USE_REDIS=true`)
 - [ ] Configure log aggregation
 - [ ] Set up monitoring

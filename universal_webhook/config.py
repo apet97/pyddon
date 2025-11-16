@@ -12,6 +12,11 @@ class Settings(BaseClockifySettings):
         default="sqlite+aiosqlite:///./universal_webhook.db",
         alias="UNIVERSAL_WEBHOOK_DB_URL"
     )
+    addon_key: str = Field(default="universal-webhook-api", alias="UNIVERSAL_WEBHOOK_ADDON_KEY")
+    require_signature_verification: bool = Field(
+        default=True,
+        alias="UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION",
+    )
 
     # Bootstrap settings
     bootstrap_max_rps: int = Field(default=25, alias="UW_BOOTSTRAP_MAX_RPS")

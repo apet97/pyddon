@@ -8,6 +8,11 @@ class Settings(BaseClockifySettings):
     
     app_port: int = Field(default=8000, alias="APP_PORT")
     db_url: str = Field(default="sqlite+aiosqlite:///./api_studio.db", alias="API_STUDIO_DB_URL")
+    addon_key: str = Field(default="clockify-api-studio", alias="API_STUDIO_ADDON_KEY")
+    require_signature_verification: bool = Field(
+        default=True,
+        alias="API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION",
+    )
 
     bootstrap_max_rps: int = Field(default=25, alias="API_STUDIO_BOOTSTRAP_MAX_RPS")
     bootstrap_include_heavy_endpoints: bool = Field(
