@@ -10,9 +10,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .bootstrap import run_bootstrap_for_workspace
-from .clockify_client import ClockifyClient
-from .db import async_session_maker, get_session
+from .bootstrap import run_bootstrap_background_task
+from .db import get_session
 from .models import BootstrapState, EntityCache, Flow, FlowExecution, Installation, WebhookLog
 
 router = APIRouter(prefix="/ui", tags=["ui"])
@@ -432,7 +431,7 @@ async def trigger_bootstrap(
         raise HTTPException(status_code=404, detail="No active installation for workspace")
     
     asyncio.create_task(
-        _run_bootstrap_background(
+        run_bootstrap_background_task(
             workspace_id=workspace_id,
             api_url=installation.api_url,
             addon_token=installation.addon_token,
@@ -440,21 +439,3 @@ async def trigger_bootstrap(
     )
     
     return {"status": "triggered", "message": "Bootstrap started in background"}
-
-
-async def _run_bootstrap_background(
-    workspace_id: str,
-    api_url: str,
-    addon_token: str,
-) -> None:
-    """Run bootstrap using an isolated DB session so request sessions can close."""
-    client = ClockifyClient(base_url=api_url, addon_token=addon_token)
-    async with async_session_maker() as background_session:
-        try:
-            await run_bootstrap_for_workspace(background_session, workspace_id, client)
-        except Exception as exc:
-            logger.error(
-                "bootstrap_background_failed",
-                workspace_id=workspace_id,
-                error=str(exc),
-            )

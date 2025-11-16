@@ -2,16 +2,24 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clockify_core import ClockifyClient, RateLimiter, list_safe_get_operations
+from clockify_core import (
+    ClockifyClient,
+    RateLimiter,
+    increment_counter,
+    is_heavy_operation,
+    is_time_entry_operation,
+    list_safe_get_operations,
+)
 
 from .config import settings
 from .models import BootstrapState, EntityCache
+from .db import async_session_maker
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +54,7 @@ async def run_bootstrap_for_workspace(
     await session.commit()
 
     # Get safe operations
-    safe_ops = list_safe_get_operations()
+    safe_ops = _filter_operations(list_safe_get_operations())
     bootstrap_state.total = len(safe_ops)
     await session.commit()
 
@@ -177,7 +185,11 @@ async def _fetch_and_store_operation(
 
     while True:
         await rate_limiter.acquire()
-        params = {"page": page, "page-size": page_size}
+        params = {
+            **_default_query_params(operation),
+            "page": page,
+            "page-size": page_size,
+        }
         resp = await client.get(actual_path, params=params)
         resp.raise_for_status()
 
@@ -237,3 +249,59 @@ async def _fetch_and_store_operation(
         await session.commit()
 
     return hit_page_cap
+
+
+def _filter_operations(operations: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Filter heavy operations and optionally drop time entry endpoints."""
+    filtered: list[Dict[str, Any]] = []
+    for op in operations:
+        if not settings.bootstrap_include_heavy_endpoints and is_heavy_operation(op):
+            logger.info(
+                "Skipping heavy bootstrap operation %s",
+                op.get("operation_id", op.get("path")),
+            )
+            continue
+        if not settings.bootstrap_include_time_entries and is_time_entry_operation(op):
+            logger.info(
+                "Skipping time entry bootstrap operation %s",
+                op.get("operation_id", op.get("path")),
+            )
+            continue
+        filtered.append(op)
+    return filtered
+
+
+def _default_query_params(operation: Dict[str, Any]) -> Dict[str, Any]:
+    """Build default query params for specific operations (e.g., time entries)."""
+    if not is_time_entry_operation(operation):
+        return {}
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    start = now - timedelta(days=max(1, settings.bootstrap_time_entry_days_back))
+    return {
+        "start": start.isoformat().replace("+00:00", "Z"),
+        "end": now.isoformat().replace("+00:00", "Z"),
+    }
+
+
+async def run_bootstrap_background_task(
+    workspace_id: str,
+    api_url: str,
+    addon_token: str,
+) -> None:
+    """Run bootstrap in the background using an isolated DB session."""
+    client = ClockifyClient(api_url, addon_token)
+    async with async_session_maker() as background_session:
+        try:
+            await run_bootstrap_for_workspace(
+                session=background_session,
+                workspace_id=workspace_id,
+                client=client,
+            )
+            increment_counter("uw.bootstrap.completed")
+        except Exception as exc:  # pragma: no cover - background path
+            increment_counter("uw.bootstrap.errors")
+            logger.error(
+                "Background bootstrap failed for workspace %s: %s",
+                workspace_id,
+                exc,
+            )

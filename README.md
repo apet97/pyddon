@@ -217,6 +217,8 @@ clockify-api-studio-py-kit/
 API_STUDIO_DB_URL=sqlite+aiosqlite:///./api_studio.db
 API_STUDIO_BOOTSTRAP_MAX_RPS=25
 API_STUDIO_BOOTSTRAP_INCLUDE_HEAVY_ENDPOINTS=false
+API_STUDIO_WEBHOOK_LOG_RETENTION_DAYS=90
+API_STUDIO_FLOW_EXECUTION_RETENTION_DAYS=30
 APP_PORT=8000
 LOG_LEVEL=INFO
 CLOCKIFY_API_BASE_URL=https://api.clockify.me
@@ -229,15 +231,18 @@ UNIVERSAL_WEBHOOK_PORT=8001
 UW_BOOTSTRAP_MAX_RPS=25
 UW_BOOTSTRAP_INCLUDE_HEAVY=false
 UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES=false
+UW_BOOTSTRAP_TIME_ENTRY_DAYS=30
 UW_BOOTSTRAP_MAX_PAGES=200  # configurable page cap for bootstrap pagination
 UW_ENABLE_CUSTOM_WEBHOOKS=true
 UW_ENABLE_FLOWS=true
 UW_ENABLE_GENERIC_HTTP_ACTIONS=false
 UW_WEBHOOK_LOG_RETENTION_DAYS=90
+UW_FLOW_EXECUTION_RETENTION_DAYS=90
+UW_CACHE_TTL_DAYS=7
 LOG_LEVEL=INFO
 ```
 
-Bootstrap pagination respects `UW_BOOTSTRAP_MAX_PAGES` (default `200`). When the cap is reached, the service logs a warning with workspace + operation context and records the truncation in `BootstrapState.last_error` so the UI dashboard surfaces the partial result. Set the env var higher if you need deeper historical fetches; lower it to keep bootstrap windows bounded in large workspaces.
+Bootstrap pagination respects `UW_BOOTSTRAP_MAX_PAGES` (default `200`). When the cap is reached, the service logs a warning with workspace + operation context and records the truncation in `BootstrapState.last_error` so the UI dashboard surfaces the partial result. Set the env var higher if you need deeper historical fetches; lower it to keep bootstrap windows bounded in large workspaces. Use `UW_BOOTSTRAP_INCLUDE_HEAVY` / `UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES` to opt into heavier endpoints, `UW_BOOTSTRAP_TIME_ENTRY_DAYS` to bound how far back time entries are fetched, and `UW_CACHE_TTL_DAYS` to control when cached entities are purged during retention cleanup.
 
 ### Observability & Telemetry
 

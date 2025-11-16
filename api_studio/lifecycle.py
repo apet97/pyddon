@@ -10,8 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import get_session
 from .models import Installation, BootstrapState
-from .bootstrap import run_bootstrap_for_workspace
-from .clockify_client import ClockifyClient
+from .bootstrap import run_bootstrap_background_task
 from clockify_core import increment_counter
 
 router = APIRouter(prefix="/lifecycle", tags=["lifecycle"])
@@ -144,22 +143,15 @@ async def lifecycle_installed(payload: InstallationPayload, session: AsyncSessio
 
     if bootstrap_on_install:
         logger.info(f"Triggering bootstrap for workspace {payload.workspace_id}")
-        # Kick off bootstrap in background (non-blocking)
-        client = ClockifyClient(base_url=payload.api_url, addon_token=payload.auth_token)
-        # Fire and forget - don't await
-        asyncio.create_task(_run_bootstrap_background(payload.workspace_id, client, session))
+        asyncio.create_task(
+            run_bootstrap_background_task(
+                workspace_id=payload.workspace_id,
+                api_url=payload.api_url,
+                addon_token=payload.auth_token,
+            )
+        )
 
     return {"status": "ok", "message": "Installation successful"}
-
-
-async def _run_bootstrap_background(workspace_id: str, client: ClockifyClient, session: AsyncSession) -> None:
-    """Run bootstrap in the background."""
-    try:
-        await run_bootstrap_for_workspace(session, workspace_id, client)
-        increment_counter("bootstrap.completed")
-    except Exception as e:
-        increment_counter("bootstrap.errors")
-        logger.error(f"Background bootstrap failed for workspace {workspace_id}: {e}")
 
 
 @router.post("/uninstalled")

@@ -4,9 +4,9 @@
 **Status**: ✅ **ALL CHECKS PASSED**
 
 ## This Pass
-- Added a configurable bootstrap pagination cap (`UW_BOOTSTRAP_MAX_PAGES`) for Universal Webhook, including warning logs and state updates when the ceiling is reached.
-- Normalized Universal Webhook logging (no stray `print`/keyword args) and ensured bootstrap truncation gets recorded in `BootstrapState`.
-- Updated README/.env docs to reflect canonical webhook + scope coverage, the security posture, and the new pagination env var.
+- Fixed API Studio + Universal Webhook bootstrap background jobs to open their own DB sessions so lifecycle/install callbacks no longer race a closing request session.
+- Added OpenAPI-aware helpers to drop heavy endpoints unless explicitly enabled, wired `UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES` + `UW_BOOTSTRAP_TIME_ENTRY_DAYS` into bootstrap queries, and plumbed cache TTL/retention env vars into scheduled cleanup.
+- Tightened Universal Webhook observability (workspace-aware webhook logs, metrics for flows/actions/errors, sanitized header logging) and synced `.env.example` / README docs with the new retention + bootstrap flags across services.
 - Tests:
   - `./venv/bin/python -m pytest tests -v`
   - `cd clockify-python-addon && ./venv/bin/python -m pytest tests -v`

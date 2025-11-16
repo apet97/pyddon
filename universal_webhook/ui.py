@@ -11,10 +11,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clockify_core import ClockifyClient
-
-from .bootstrap import run_bootstrap_for_workspace
-from .db import async_session_maker, get_db
+from .bootstrap import run_bootstrap_background_task
+from .db import get_db
 from .models import (
     BootstrapState,
     EntityCache,
@@ -449,7 +447,7 @@ async def trigger_bootstrap(
         raise HTTPException(status_code=404, detail="Installation not found")
 
     asyncio.create_task(
-        _run_bootstrap_background(
+        run_bootstrap_background_task(
             workspace_id=workspace_id,
             api_url=installation.api_url,
             addon_token=installation.addon_token,
@@ -460,25 +458,3 @@ async def trigger_bootstrap(
         "status": "scheduled",
         "workspace_id": workspace_id
     }
-
-
-async def _run_bootstrap_background(
-    workspace_id: str,
-    api_url: str,
-    addon_token: str,
-) -> None:
-    """Execute bootstrap using an isolated DB session."""
-    client = ClockifyClient(api_url, addon_token)
-    async with async_session_maker() as background_session:
-        try:
-            await run_bootstrap_for_workspace(
-                session=background_session,
-                workspace_id=workspace_id,
-                client=client,
-            )
-        except Exception as exc:
-            logger.error(
-                "Background bootstrap failed for workspace %s: %s",
-                workspace_id,
-                exc,
-            )

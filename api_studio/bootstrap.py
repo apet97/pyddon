@@ -7,8 +7,15 @@ from typing import Any, Dict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clockify_core import ClockifyClient, RateLimiter, list_safe_get_operations
+from clockify_core import (
+    ClockifyClient,
+    RateLimiter,
+    increment_counter,
+    is_heavy_operation,
+    list_safe_get_operations,
+)
 
+from .db import async_session_maker
 from .config import settings
 from .models import BootstrapState, EntityCache
 
@@ -43,8 +50,8 @@ async def run_bootstrap_for_workspace(session: AsyncSession, workspace_id: str, 
 
     await session.commit()
 
-    # Get safe GET operations
-    safe_ops = list_safe_get_operations()
+    # Get safe GET operations with optional heavy filtering
+    safe_ops = _filter_operations(list_safe_get_operations())
     bootstrap_state.total = len(safe_ops)
     await session.commit()
 
@@ -219,3 +226,40 @@ async def _fetch_and_store_operation(
             fetched_at=datetime.now(timezone.utc)
         )
         session.add(cache_entry)
+
+
+def _filter_operations(operations: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Filter operations based on configured flags."""
+    if settings.bootstrap_include_heavy_endpoints:
+        return operations
+    filtered = []
+    for op in operations:
+        if is_heavy_operation(op):
+            logger.info(
+                "bootstrap_skipping_heavy_operation",
+                path=op.get("path"),
+                operation_id=op.get("operation_id"),
+            )
+            continue
+        filtered.append(op)
+    return filtered
+
+
+async def run_bootstrap_background_task(
+    workspace_id: str,
+    api_url: str,
+    addon_token: str,
+) -> None:
+    """Run bootstrap with an isolated DB session for background jobs."""
+    client = ClockifyClient(base_url=api_url, addon_token=addon_token)
+    async with async_session_maker() as background_session:
+        try:
+            await run_bootstrap_for_workspace(background_session, workspace_id, client)
+            increment_counter("bootstrap.completed")
+        except Exception as exc:  # pragma: no cover - background path
+            increment_counter("bootstrap.errors")
+            logger.error(
+                "bootstrap_background_failed",
+                workspace_id=workspace_id,
+                error=str(exc),
+            )

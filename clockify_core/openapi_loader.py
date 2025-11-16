@@ -136,3 +136,52 @@ def list_all_operations() -> List[Dict[str, Any]]:
             )
 
     return all_ops
+
+
+_HEAVY_KEYWORDS = ("report", "detailed", "export")
+_HEAVY_TAGS = {
+    "reports",
+    "reporting",
+    "detailed reports",
+    "exports",
+}
+_TIME_ENTRY_KEYWORDS = ("time-entries", "timeentries", "time_entries")
+_TIME_ENTRY_TAGS = {
+    "time entry",
+    "time entries",
+    "time-entry",
+}
+
+
+def is_heavy_operation(operation: Dict[str, Any]) -> bool:
+    """Return True if the operation is considered \"heavy\" (reports/exports)."""
+    path_lower = (operation.get("path") or "").lower()
+    op_meta = operation.get("operation") or {}
+    summary_lower = (op_meta.get("summary") or "").lower()
+    description_lower = (op_meta.get("description") or "").lower()
+    tags_lower = [tag.lower() for tag in operation.get("tags", [])]
+
+    if any(keyword in path_lower for keyword in _HEAVY_KEYWORDS):
+        return True
+    combined = f"{summary_lower} {description_lower}"
+    if any(keyword in combined for keyword in _HEAVY_KEYWORDS):
+        return True
+    if any(tag in _HEAVY_TAGS for tag in tags_lower):
+        return True
+    return False
+
+
+def is_time_entry_operation(operation: Dict[str, Any]) -> bool:
+    """Return True if the operation fetches time-entry style data."""
+    path_lower = (operation.get("path") or "").lower()
+    op_meta = operation.get("operation") or {}
+    summary_lower = (op_meta.get("summary") or "").lower()
+    tags_lower = [tag.lower() for tag in operation.get("tags", [])]
+
+    if any(keyword in path_lower for keyword in _TIME_ENTRY_KEYWORDS):
+        return True
+    if any(tag in _TIME_ENTRY_TAGS for tag in tags_lower):
+        return True
+    if "time entry" in summary_lower or "time-entry" in summary_lower:
+        return True
+    return False

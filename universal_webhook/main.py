@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import api_explorer, lifecycle, ui, webhooks
 from .config import settings
 from .db import get_db
-from .models import WebhookLog, FlowExecution
+from .models import EntityCache, FlowExecution, WebhookLog
 from clockify_core import get_metrics_collector, run_retention_cleanup
 
 logger = logging.getLogger(__name__)
@@ -97,8 +97,9 @@ async def periodic_cleanup_task(stop_event: asyncio.Event):
                 cleanup_tasks = [
                     (WebhookLog, "received_at", settings.webhook_log_retention_days),
                     (FlowExecution, "created_at", settings.flow_execution_retention_days),
+                    (EntityCache, "fetched_at", settings.cache_ttl_days),
                 ]
-                
+
                 results = await run_retention_cleanup(session, cleanup_tasks)
                 
                 for table, result in results.items():

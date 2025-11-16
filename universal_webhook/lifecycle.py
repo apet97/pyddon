@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .bootstrap import run_bootstrap_background_task
 from .config import settings
 from .db import get_db
 from .models import BootstrapState, Installation
@@ -106,15 +107,11 @@ async def installed(
     # TODO: Trigger background bootstrap job if enabled
     # For now, we'll implement this in bootstrap.py and call it later
     if run_bootstrap:
-        # Fire-and-forget bootstrap job
-        from .bootstrap import run_bootstrap_for_workspace
-        from clockify_core import ClockifyClient
-        
         asyncio.create_task(
-            run_bootstrap_for_workspace(
-                session=session,
+            run_bootstrap_background_task(
                 workspace_id=payload.workspaceId,
-                client=ClockifyClient(payload.apiUrl, payload.authToken)
+                api_url=payload.apiUrl,
+                addon_token=payload.authToken,
             )
         )
 

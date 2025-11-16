@@ -1,16 +1,18 @@
 """Flow engine for Universal Webhook add-on."""
 from __future__ import annotations
 
-import json
+import logging
 from typing import Any, Dict
 
 from jsonpath_ng import parse as jsonpath_parse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clockify_core import ClockifyClient, get_operation_by_id
+from clockify_core import ClockifyClient, get_operation_by_id, increment_counter
 
 from .models import Flow, FlowExecution, WebhookLog
+
+logger = logging.getLogger(__name__)
 
 
 async def evaluate_and_run_flows_for_webhook(
@@ -40,7 +42,7 @@ async def evaluate_and_run_flows_for_webhook(
         if webhook.event_type not in (flow.trigger_event_types or []):
             continue
         
-        matching_flows.append(flow)
+    matching_flows.append(flow)
 
     # Execute each matching flow
     for flow in matching_flows:
@@ -105,44 +107,88 @@ async def _execute_flow(
     client: ClockifyClient
 ) -> None:
     """Execute a flow's actions."""
-    actions_result = []
+    increment_counter("uw.flows.executed.total")
+    logger.info(
+        "Executing flow %s for workspace %s (webhook %s)",
+        flow.id,
+        flow.workspace_id,
+        webhook.id,
+    )
+    actions = flow.actions or []
+    actions_result: list[Dict[str, Any]] = []
     context = {"webhook": webhook.payload}
+    failure_reason: str | None = None
 
     try:
-        for idx, action in enumerate(flow.actions):
-            action_type = action.get("type", "CLOCKIFY_API")
-            
+        for idx, action in enumerate(actions):
+            action_type = (action.get("type") or "CLOCKIFY_API").upper()
             if action_type == "CLOCKIFY_API":
-                result = await _execute_clockify_action(
-                    action, context, client
-                )
-                actions_result.append(result)
-                context[f"action_{idx}"] = result
+                result = await _execute_clockify_action(action, context, client)
             elif action_type == "GENERIC_HTTP":
-                # TODO: Implement generic HTTP actions
-                actions_result.append({"status": "skipped", "reason": "not implemented"})
+                result = {
+                    "status": "skipped",
+                    "message": "GENERIC_HTTP actions not implemented",
+                }
+            else:
+                result = {
+                    "status": "error",
+                    "message": f"Unsupported action type: {action_type}",
+                }
 
-        # Log successful execution
+            formatted_result = {
+                "action_index": idx,
+                "action_type": action_type,
+                **result,
+            }
+            actions_result.append(formatted_result)
+
+            status = formatted_result.get("status")
+            if status == "success":
+                increment_counter("uw.flows.actions.executed")
+                context[f"action_{idx}"] = formatted_result.get("data")
+                continue
+
+            if status == "error":
+                increment_counter("uw.flows.actions.errors")
+                failure_reason = formatted_result.get("message") or formatted_result.get("error") or "Flow action failed"
+                logger.error(
+                    "Flow %s action %s failed: %s",
+                    flow.id,
+                    idx,
+                    failure_reason,
+                )
+                break
+
+        status_value = "FAILED" if failure_reason else "SUCCESS"
+        detail = failure_reason or "All actions completed successfully"
+        if failure_reason:
+            increment_counter("uw.flows.executed.failed")
+        else:
+            increment_counter("uw.flows.executed.completed")
+
         execution = FlowExecution(
             workspace_id=flow.workspace_id,
             flow_id=flow.id,
             webhook_log_id=webhook.id,
-            status="SUCCESS",
-            detail="All actions completed successfully",
+            status=status_value,
+            detail=detail,
             actions_result={"actions": actions_result}
+            if not failure_reason
+            else {"actions": actions_result, "error": failure_reason},
         )
         session.add(execution)
         await session.commit()
 
-    except Exception as e:
-        # Log failed execution
+    except Exception as exc:
+        increment_counter("uw.flows.executed.failed")
+        logger.exception("Flow %s execution raised an error", flow.id)
         execution = FlowExecution(
             workspace_id=flow.workspace_id,
             flow_id=flow.id,
             webhook_log_id=webhook.id,
             status="FAILED",
-            detail=str(e),
-            actions_result={"actions": actions_result, "error": str(e)}
+            detail=str(exc),
+            actions_result={"actions": actions_result, "error": str(exc)},
         )
         session.add(execution)
         await session.commit()

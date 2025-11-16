@@ -5,6 +5,8 @@ from .openapi_loader import (
     list_all_operations,
     list_safe_get_operations,
     get_operation_by_id,
+    is_heavy_operation,
+    is_time_entry_operation,
 )
 from .rate_limiter import RateLimiter
 from .security import (
@@ -25,6 +27,8 @@ __all__ = [
     "list_all_operations",
     "list_safe_get_operations",
     "get_operation_by_id",
+    "is_heavy_operation",
+    "is_time_entry_operation",
     "RateLimiter",
     "verify_jwt_token",
     "verify_webhook_signature",
