@@ -59,12 +59,57 @@ def create_app() -> FastAPI:
             db_status = "ok"
         except Exception as e:
             db_status = f"error: {str(e)}"
-        
+
         return {
             "status": "ok" if db_status == "ok" else "degraded",
             "service": "universal-webhook",
             "database": db_status
         }
+
+    @app.get("/ready")
+    async def ready(session: AsyncSession = Depends(get_db)) -> dict:
+        """
+        Readiness check endpoint with comprehensive dependency validation.
+
+        Returns 200 if service can accept traffic, 503 if not ready.
+        Used by Kubernetes and Docker Compose for orchestration.
+        """
+        checks = {
+            "database": False,
+            "service": "universal-webhook"
+        }
+
+        try:
+            # Check database connectivity
+            await session.execute(text("SELECT 1"))
+            checks["database"] = True
+
+            # All checks must pass
+            all_ready = checks["database"]
+
+            if not all_ready:
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "ready": False,
+                        "checks": checks
+                    }
+                )
+
+            return {
+                "ready": True,
+                "checks": checks
+            }
+        except Exception as e:
+            logger.error(f"Readiness check failed: {e}")
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "ready": False,
+                    "checks": checks,
+                    "error": str(e)
+                }
+            )
 
     @app.get("/manifest")
     async def manifest() -> JSONResponse:

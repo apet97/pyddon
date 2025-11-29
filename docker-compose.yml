@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (single instance, 3 databases)
+  postgres:
+    image: postgres:14-alpine
+    container_name: clockify-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clockify}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-clockify}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clockify}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clockify-network
+    restart: unless-stopped
+
+  # API Studio (Port 8000)
+  api_studio:
+    build:
+      context: .
+      dockerfile: api_studio/Dockerfile
+    container_name: clockify-api-studio
+    ports:
+      - "8000:8000"
+    environment:
+      - API_STUDIO_DB_URL=postgresql+asyncpg://${POSTGRES_USER:-clockify}:${POSTGRES_PASSWORD}@postgres:5432/api_studio
+      - CLOCKIFY_API_BASE_URL=${CLOCKIFY_API_BASE_URL:-https://api.clockify.me}
+      - API_STUDIO_ADDON_KEY=${API_STUDIO_ADDON_KEY:-clockify-api-studio}
+      - API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION=${API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION:-true}
+      - API_STUDIO_BOOTSTRAP_MAX_RPS=${API_STUDIO_BOOTSTRAP_MAX_RPS:-25}
+      - API_STUDIO_BOOTSTRAP_INCLUDE_HEAVY_ENDPOINTS=${API_STUDIO_BOOTSTRAP_INCLUDE_HEAVY_ENDPOINTS:-false}
+      - API_STUDIO_WEBHOOK_LOG_RETENTION_DAYS=${API_STUDIO_WEBHOOK_LOG_RETENTION_DAYS:-90}
+      - API_STUDIO_FLOW_EXECUTION_RETENTION_DAYS=${API_STUDIO_FLOW_EXECUTION_RETENTION_DAYS:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clockify}:${POSTGRES_PASSWORD}@postgres:5432/api_studio
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./logs/api_studio:/app/logs
+    networks:
+      - clockify-network
+    restart: unless-stopped
+
+  # Universal Webhook (Port 8001)
+  universal_webhook:
+    build:
+      context: .
+      dockerfile: universal_webhook/Dockerfile
+    container_name: clockify-universal-webhook
+    ports:
+      - "8001:8001"
+    environment:
+      - UNIVERSAL_WEBHOOK_DB_URL=postgresql+asyncpg://${POSTGRES_USER:-clockify}:${POSTGRES_PASSWORD}@postgres:5432/universal_webhook
+      - CLOCKIFY_API_BASE_URL=${CLOCKIFY_API_BASE_URL:-https://api.clockify.me}
+      - UNIVERSAL_WEBHOOK_PORT=8001
+      - UNIVERSAL_WEBHOOK_ADDON_KEY=${UNIVERSAL_WEBHOOK_ADDON_KEY:-universal-webhook-api}
+      - UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION=${UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION:-true}
+      - UW_BOOTSTRAP_MAX_RPS=${UW_BOOTSTRAP_MAX_RPS:-25}
+      - UW_BOOTSTRAP_INCLUDE_HEAVY=${UW_BOOTSTRAP_INCLUDE_HEAVY:-false}
+      - UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES=${UW_BOOTSTRAP_INCLUDE_TIME_ENTRIES:-false}
+      - UW_BOOTSTRAP_TIME_ENTRY_DAYS=${UW_BOOTSTRAP_TIME_ENTRY_DAYS:-30}
+      - UW_BOOTSTRAP_MAX_PAGES=${UW_BOOTSTRAP_MAX_PAGES:-200}
+      - UW_ENABLE_CUSTOM_WEBHOOKS=${UW_ENABLE_CUSTOM_WEBHOOKS:-true}
+      - UW_ENABLE_FLOWS=${UW_ENABLE_FLOWS:-true}
+      - UW_ENABLE_GENERIC_HTTP_ACTIONS=${UW_ENABLE_GENERIC_HTTP_ACTIONS:-false}
+      - UW_WEBHOOK_LOG_RETENTION_DAYS=${UW_WEBHOOK_LOG_RETENTION_DAYS:-90}
+      - UW_FLOW_EXECUTION_RETENTION_DAYS=${UW_FLOW_EXECUTION_RETENTION_DAYS:-90}
+      - UW_CACHE_TTL_DAYS=${UW_CACHE_TTL_DAYS:-7}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clockify}:${POSTGRES_PASSWORD}@postgres:5432/universal_webhook
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./logs/universal_webhook:/app/logs
+    networks:
+      - clockify-network
+    restart: unless-stopped
+
+  # Clockify Python Addon (Port 8002)
+  clockify_addon:
+    build:
+      context: ./clockify-python-addon
+      dockerfile: Dockerfile
+    container_name: clockify-addon
+    ports:
+      - "8002:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clockify}:${POSTGRES_PASSWORD}@postgres:5432/clockify_addon
+      - BASE_URL=${CLOCKIFY_ADDON_BASE_URL:-http://localhost:8002}
+      - DEBUG=${DEBUG:-false}
+      - REQUIRE_SIGNATURE_VERIFICATION=${REQUIRE_SIGNATURE_VERIFICATION:-true}
+      - CLOCKIFY_API_BASE=${CLOCKIFY_API_BASE:-https://api.clockify.me/api/v1}
+      - CLOCKIFY_DEVELOPER_API_BASE=${CLOCKIFY_DEVELOPER_API_BASE:-https://developer.clockify.me/api/v1}
+      - CLOCKIFY_PTO_API_BASE=${CLOCKIFY_PTO_API_BASE:-https://pto.api.clockify.me/v1}
+      - CLOCKIFY_REPORTS_API_BASE=${CLOCKIFY_REPORTS_API_BASE:-https://reports.api.clockify.me/v1}
+      - RATE_LIMIT_RPS=${RATE_LIMIT_RPS:-50}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - AUTO_BOOTSTRAP_ON_INSTALL=${AUTO_BOOTSTRAP_ON_INSTALL:-true}
+      - BOOTSTRAP_BATCH_SIZE=${BOOTSTRAP_BATCH_SIZE:-10}
+      - BOOTSTRAP_MAX_RETRIES=${BOOTSTRAP_MAX_RETRIES:-3}
+      - BOOTSTRAP_MAX_PAGES=${BOOTSTRAP_MAX_PAGES:-1000}
+      - API_CALL_MAX_PAYLOAD_BYTES=${API_CALL_MAX_PAYLOAD_BYTES:-1048576}
+      - WEBHOOK_MAX_PAYLOAD_BYTES=${WEBHOOK_MAX_PAYLOAD_BYTES:-5242880}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - USE_REDIS=${USE_REDIS:-false}
+      - REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./logs/clockify_addon:/app/logs
+    networks:
+      - clockify-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  clockify-network:
+    driver: bridge

@@ -1,0 +1,34 @@
+# Test-specific Dockerfile
+# Includes all dependencies needed for running tests
+
+FROM python:3.11.8-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        postgresql-client \
+        curl \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY pyproject.toml ./
+COPY clockify-python-addon/requirements.txt ./clockify-addon-requirements.txt
+
+# Install Python dependencies
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -e . && \
+    pip install -r clockify-addon-requirements.txt && \
+    pip install pytest pytest-asyncio pytest-cov pytest-httpx
+
+# Copy application code
+COPY . .
+
+# Default command (run all tests)
+CMD ["sh", "-c", "PYTHONPATH=. pytest tests/ -v && cd clockify-python-addon && PYTHONPATH=. pytest tests/ -v"]

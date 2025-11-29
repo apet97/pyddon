@@ -1,0 +1,63 @@
+version: '3.8'
+
+# Isolated test environment with PostgreSQL
+# Run with: docker-compose -f docker-compose.test.yml run --rm test-runner
+
+services:
+  postgres-test:
+    image: postgres:14-alpine
+    container_name: clockify-test-db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_db
+    tmpfs:
+      # Use tmpfs for faster tests (data discarded after container stops)
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: clockify-test-runner
+    environment:
+      # Use PostgreSQL for integration tests
+      - API_STUDIO_DB_URL=postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_db
+      - UNIVERSAL_WEBHOOK_DB_URL=postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_db
+      - DATABASE_URL=postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_db
+      - REQUIRE_SIGNATURE_VERIFICATION=false
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: >
+      sh -c "
+        echo '==========================================' &&
+        echo 'Running Root Tests (api_studio + universal_webhook)' &&
+        echo '==========================================' &&
+        PYTHONPATH=. pytest tests/ -v --cov=api_studio --cov=universal_webhook --cov=clockify_core --tb=short &&
+        echo '' &&
+        echo '==========================================' &&
+        echo 'Running Clockify Python Addon Tests' &&
+        echo '==========================================' &&
+        cd clockify-python-addon &&
+        PYTHONPATH=. pytest tests/ -v --cov=app --tb=short &&
+        echo '' &&
+        echo '==========================================' &&
+        echo 'All Tests Passed! 🚀' &&
+        echo '=========================================='
+      "
+
+networks:
+  test-network:
+    driver: bridge

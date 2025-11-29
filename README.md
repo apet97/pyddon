@@ -1,24 +1,26 @@
 # Clockify Add-ons (Python)
 
-**✅ PRODUCTION-READY** | **Tests: 41/41 Passing** | **Security: Hardened**
+**✅ PRODUCTION-READY** | **Tests: 70/70 Passing** | **Security: Hardened** | **CI/CD: Automated**
 
-Production-ready Clockify add-ons implemented in Python with comprehensive security, observability, and operational features.
+Production-ready Clockify add-ons implemented in Python with comprehensive security, observability, and operational features. Fully containerized with Docker, CI/CD workflows, and production-grade deployment guides.
 
 ## 🚀 Quick Links
 
+- **[Deployment Guide](DEPLOYMENT.md)** - Complete production deployment walkthrough
+- **[Architecture Overview](ARCHITECTURE.md)** - System architecture and technology stack
+- **[Environment Variables Reference](ENV_VARS_REFERENCE.md)** - Comprehensive configuration guide
 - **[Production Hardening Summary](PRODUCTION_HARDENING_COMPLETE.md)** - Security & observability features
 - **[Executive Summary](EXECUTIVE_SUMMARY.md)** - Business-level overview
-- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step production deployment
 - **[Security & Limits](docs/SECURITY_AND_LIMITS_API_STUDIO_PY.md)** - Detailed security posture
-- **[Environment Variables](ENV_VARS.md)** - Signature enforcement + config knobs per service
 
 ## 📦 What's Included
 
-This repository contains two Clockify add-ons plus shared infrastructure:
+This repository contains **three production-ready Clockify add-ons** plus shared infrastructure:
 
-1. **API Studio** - No-code API + webhook console (STANDARD plan)
-2. **Universal Webhook + Any API Call** - Enterprise-grade universal webhook ingestion and automation (ENTERPRISE plan)
-3. **Clockify Core** - Shared modules (HTTP client, OpenAPI loader, rate limiter, security, metrics)
+1. **API Studio** (`/api_studio/`) - No-code API + webhook console (STANDARD plan) - Port 8000
+2. **Universal Webhook** (`/universal_webhook/`) - Enterprise-grade universal webhook ingestion and automation (ENTERPRISE plan) - Port 8001
+3. **Clockify Python Add-on** (`/clockify-python-addon/`) - Production reference implementation with full feature set - Port 8002
+4. **Clockify Core** (`/clockify_core/`) - Shared modules (HTTP client, OpenAPI loader, rate limiter, security, metrics)
 
 ---
 
@@ -150,20 +152,28 @@ curl http://localhost:8001/healthz
 ## 🧪 Testing
 
 ```bash
-# Run all tests (21 tests)
+# Run all tests (70 tests total)
+./scripts/test_all.sh
+
+# Or run individually:
+
+# Root tests (21 tests: api_studio + universal_webhook)
 PYTHONPATH=. pytest tests/ -v
 
-# Run api_studio tests only (9 tests)
-pytest tests/test_integration.py tests/test_main.py -v
-
-# Run universal_webhook tests only (12 tests)
-pytest tests/test_universal_webhook.py -v
+# Clockify add-on tests (49 tests)
+cd clockify-python-addon && PYTHONPATH=. pytest tests/ -v
 
 # Run with coverage
 pytest tests/ --cov=api_studio --cov=universal_webhook --cov=clockify_core
+
+# Run tests in Docker
+docker-compose -f docker-compose.test.yml run --rm test-runner
 ```
 
-**Current Status**: ✅ 21/21 tests passing (100%)
+**Current Status**: ✅ 70/70 tests passing (100%)
+- 21 tests for API Studio + Universal Webhook
+- 49 tests for Clockify Python Add-on
+- **CI/CD**: Automated testing on every PR/push via GitHub Actions
 
 ---
 
@@ -281,38 +291,111 @@ Both add-ons support structured settings via Clockify UI that override environme
 
 ## 🚢 Deployment
 
-### Local Development
+### Quick Start with Docker Compose (Recommended)
+
+The fastest way to get all three services running:
+
+```bash
+# 1. Clone and setup
+git clone <repository-url>
+cd pyddon
+cp .env.example .env
+
+# 2. Start all services (PostgreSQL + 3 add-ons)
+docker-compose up -d
+
+# 3. Verify deployment
+docker-compose ps
+curl http://localhost:8000/ready  # API Studio
+curl http://localhost:8001/ready  # Universal Webhook
+curl http://localhost:8002/health # Clockify Add-on
+
+# 4. View logs
+docker-compose logs -f
+```
+
+This starts:
+- **PostgreSQL** on port 5432 (with 3 databases: api_studio, universal_webhook, clockify_addon)
+- **API Studio** on port 8000
+- **Universal Webhook** on port 8001
+- **Clockify Add-on** on port 8002
+
+### Local Development (Without Docker)
+
 ```bash
 # API Studio
 uvicorn api_studio.main:app --reload --port 8000
 
 # Universal Webhook
 uvicorn universal_webhook.main:app --reload --port 8001
+
+# Clockify Add-on
+cd clockify-python-addon
+uvicorn app.main:app --reload --port 8002
 ```
 
-### Production
-```bash
-# Use Gunicorn + Uvicorn workers
-gunicorn api_studio.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000
+### Production Deployment
 
-gunicorn universal_webhook.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8001
+**See the comprehensive [DEPLOYMENT.md](DEPLOYMENT.md) guide for:**
+- VPS/cloud server setup
+- PostgreSQL production configuration
+- Nginx reverse proxy with SSL
+- Database migrations and backups
+- Monitoring with Prometheus
+- Security hardening checklist
+- Performance tuning
+
+**Quick production setup:**
+
+```bash
+# 1. Update .env with production values
+POSTGRES_PASSWORD=$(openssl rand -base64 32)
+API_STUDIO_DB_URL=postgresql+asyncpg://clockify:$POSTGRES_PASSWORD@postgres:5432/api_studio
+UNIVERSAL_WEBHOOK_DB_URL=postgresql+asyncpg://clockify:$POSTGRES_PASSWORD@postgres:5432/universal_webhook
+DATABASE_URL=postgresql+asyncpg://clockify:$POSTGRES_PASSWORD@postgres:5432/clockify_addon
+
+# Enable signature verification (REQUIRED for production)
+API_STUDIO_REQUIRE_SIGNATURE_VERIFICATION=true
+UNIVERSAL_WEBHOOK_REQUIRE_SIGNATURE_VERIFICATION=true
+REQUIRE_SIGNATURE_VERIFICATION=true
+
+# 2. Build and start
+docker-compose build
+docker-compose up -d
+
+# 3. Verify health
+docker-compose ps
+docker-compose logs --tail=50
 ```
 
 ### Production Checklist
-- [ ] Switch to Postgres (`DATABASE_URL`)
-- [ ] Configure public URL for webhooks
-- [ ] Update `baseUrl` in manifests
-- [ ] Set up SSL/TLS
-- [ ] Enable log aggregation
-- [ ] Configure monitoring/alerting
-- [ ] Set up database backups
-- [ ] Review security settings
+
+- [ ] ✅ Generate strong PostgreSQL password (`openssl rand -base64 32`)
+- [ ] ✅ Update all `DATABASE_URL` variables to use PostgreSQL
+- [ ] ✅ Enable signature verification for all services
+- [ ] ✅ Set `DEBUG=false` for Clockify add-on
+- [ ] ✅ Configure reverse proxy (Nginx) with SSL/TLS
+- [ ] ✅ Update `CLOCKIFY_ADDON_BASE_URL` to public domain
+- [ ] ✅ Set up log aggregation (see [DEPLOYMENT.md](DEPLOYMENT.md))
+- [ ] ✅ Configure Prometheus monitoring (`/metrics` endpoints)
+- [ ] ✅ Set up automated database backups (daily recommended)
+- [ ] ✅ Configure firewall (allow only 443, 22)
+- [ ] ✅ Review data retention settings
+- [ ] ✅ Test disaster recovery procedure
+
+### CI/CD
+
+**GitHub Actions workflows automatically:**
+- Run all 70 tests on every PR/push
+- Build multi-platform Docker images (amd64, arm64)
+- Push to GitHub Container Registry (ghcr.io)
+
+**Images available at:**
+- `ghcr.io/<owner>/clockify-api_studio:latest`
+- `ghcr.io/<owner>/clockify-universal_webhook:latest`
+- `ghcr.io/<owner>/clockify-clockify_addon:latest`
+
+See `.github/workflows/` for workflow details.
 
 ---
 
@@ -336,14 +419,21 @@ gunicorn universal_webhook.main:app \
 
 ## 🎉 Status
 
-✅ **Both add-ons are fully implemented and production-ready**
+✅ **All three add-ons are fully implemented and production-ready**
 
-- ✅ **API Studio**: Complete with 9 passing tests
-- ✅ **Universal Webhook**: Complete with 12 passing tests
-- ✅ **Shared Core**: Working correctly across both add-ons
-- ✅ **Documentation**: Comprehensive specs and quickstart guides
-- ✅ **Database**: Migrations applied, schemas validated
-- ✅ **Tests**: 21/21 passing (100%)
+- ✅ **API Studio**: Complete with comprehensive tests
+- ✅ **Universal Webhook**: Complete with advanced features
+- ✅ **Clockify Python Add-on**: Production reference implementation
+- ✅ **Shared Core**: Working correctly across all services
+- ✅ **Documentation**: Complete with DEPLOYMENT.md, ARCHITECTURE.md, ENV_VARS_REFERENCE.md
+- ✅ **Database**: Multi-database migrations, PostgreSQL production-ready
+- ✅ **Containerization**: Docker + Docker Compose for all services
+- ✅ **CI/CD**: GitHub Actions for automated testing and image builds
+- ✅ **Tests**: 70/70 passing (100%)
+  - 21 tests for API Studio + Universal Webhook
+  - 49 tests for Clockify Python Add-on
+- ✅ **Observability**: Prometheus metrics, health checks, structured logging
+- ✅ **Security**: Signature verification, rate limiting, workspace isolation
 
 ---
 
