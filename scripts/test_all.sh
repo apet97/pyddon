@@ -1,60 +1,19 @@
 #!/bin/bash
-# Run all tests for all services
-# This script executes the full test suite before deployment
+# Test script for Clockify Add-ons
+# Runs all tests for the repository
 
 set -e
 
-echo "========================================="
-echo "Running All Tests"
-echo "========================================="
+echo "🧪 Running Clockify Add-ons test suite..."
 
-# Colors
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Test results
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-# Root tests (api_studio + universal_webhook)
 echo ""
-echo -e "${BLUE}1. Running root tests (api_studio + universal_webhook)...${NC}"
-if PYTHONPATH=. pytest tests/ -v --tb=short; then
-    echo -e "${GREEN}✓ Root tests passed${NC}"
-    ((TESTS_PASSED++))
-else
-    echo -e "${RED}✗ Root tests failed${NC}"
-    ((TESTS_FAILED++))
-fi
+echo "🔍 Running root tests (API Studio + Universal Webhook)..."
+./venv/bin/python -m pytest tests/ -v --tb=short
 
-# Clockify-python-addon tests
 echo ""
-echo -e "${BLUE}2. Running clockify-python-addon tests...${NC}"
+echo "🔍 Running Clockify Python Addon tests..."
 cd clockify-python-addon
-if PYTHONPATH=. pytest tests/ -v --tb=short; then
-    echo -e "${GREEN}✓ Clockify addon tests passed${NC}"
-    ((TESTS_PASSED++))
-else
-    echo -e "${RED}✗ Clockify addon tests failed${NC}"
-    ((TESTS_FAILED++))
-fi
-cd ..
+./venv/bin/python -m pytest tests/ -v --tb=short
 
-# Summary
 echo ""
-echo "========================================="
-echo "Test Summary"
-echo "========================================="
-echo -e "Passed: ${GREEN}${TESTS_PASSED}/2${NC}"
-echo -e "Failed: ${RED}${TESTS_FAILED}/2${NC}"
-echo "========================================="
-
-if [ $TESTS_FAILED -gt 0 ]; then
-    echo -e "${RED}Some tests failed. Please fix before deploying.${NC}"
-    exit 1
-else
-    echo -e "${GREEN}All tests passed! Ready for deployment. 🚀${NC}"
-    exit 0
-fi
+echo "✅ All tests completed successfully!"
