@@ -1,0 +1,10 @@
+include README.md
+include pyproject.toml
+include alembic.ini
+recursive-include api_studio *.py
+recursive-include universal_webhook *.py
+recursive-include clockify_core *.py
+recursive-include alembic *.py
+recursive-include alembic/versions *.py
+recursive-include docs *.md
+recursive-include tests *.py
