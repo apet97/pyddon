@@ -115,8 +115,6 @@ async def installed(
 
     await session.commit()
 
-    # TODO: Trigger background bootstrap job if enabled
-    # For now, we'll implement this in bootstrap.py and call it later
     if run_bootstrap:
         asyncio.create_task(
             run_bootstrap_background_task(

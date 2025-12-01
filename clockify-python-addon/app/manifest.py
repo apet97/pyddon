@@ -30,6 +30,8 @@ def _apply_base_url(value: Optional[str]) -> Optional[str]:
     placeholder = "http://localhost:8000"
     if value.startswith(placeholder):
         return value.replace(placeholder, settings.base_url, 1)
+    if value.startswith("/"):
+        return f"{settings.base_url}{value}"
     return value
 
 

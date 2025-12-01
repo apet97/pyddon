@@ -1,23 +1,18 @@
 """Security utilities for JWT validation and PII redaction."""
 from __future__ import annotations
 
+import os
 import re
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import jwt
-from jwt import PyJWTError
+from jwt import PyJWTError, PyJWKClient
 
-# Clockify public key for JWT verification (RSA256)
-CLOCKIFY_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAubktufFNO/op+E5WBWL6
-/Y9QRZGSGGCsV00FmPRl5A0mSfQu3yq2Yaq47IlN0zgFy9IUG8/JJfwiehsmbrKa
-49t/xSkpG1u9w1GUyY0g4eKDUwofHKAt3IPw0St4qsWLK9mO+koUo56CGQOEpTui
-5bMfmefVBBfShXTaZOtXPB349FdzSuYlU/5o3L12zVWMutNhiJCKyGfsuu2uXa9+
-6uQnZBw1wO3/QEci7i4TbC+ZXqW1rCcbogSMORqHAP6qSAcTFRmrjFAEsOWiUUhZ
-rLDg2QJ8VTDghFnUhYklNTJlGgfo80qEWe1NLIwvZj0h3bWRfrqZHsD/Yjh0duk6
-yQIDAQAB
------END PUBLIC KEY-----"""
+# Default JWKS endpoints; override via env to target dev/sandbox or custom hosts.
+DEFAULT_JWKS_PROD_URL = "https://api.clockify.me/.well-known/jwks.json"
+DEFAULT_JWKS_DEV_URL = "https://developer.clockify.me/.well-known/jwks.json"
+
+_jwk_clients: dict[str, PyJWKClient] = {}
 
 
 class SecurityError(Exception):
@@ -25,57 +20,69 @@ class SecurityError(Exception):
     pass
 
 
+def _resolve_jwks_url(api_base_url: Optional[str] = None) -> str:
+    """Resolve JWKS URL based on env overrides or API host hints."""
+    override = os.getenv("CLOCKIFY_JWKS_URL")
+    if override:
+        return override
+
+    env_hint = (os.getenv("CLOCKIFY_ENVIRONMENT") or "prod").lower()
+    if api_base_url:
+        host = api_base_url.lower()
+        if "developer.clockify.me" in host:
+            env_hint = "dev"
+
+    if env_hint in {"dev", "developer", "staging", "sandbox"}:
+        return os.getenv("CLOCKIFY_JWKS_DEV_URL", DEFAULT_JWKS_DEV_URL)
+    return os.getenv("CLOCKIFY_JWKS_PROD_URL", DEFAULT_JWKS_PROD_URL)
+
+
+def _get_jwk_client(jwks_url: str) -> PyJWKClient:
+    """Return a cached PyJWKClient for the given JWKS URL."""
+    client = _jwk_clients.get(jwks_url)
+    if client is None:
+        client = PyJWKClient(jwks_url, cache_keys=True)
+        _jwk_clients[jwks_url] = client
+    return client
+
+
 def verify_jwt_token(
     token: str,
     expected_addon_key: str,
     expected_workspace_id: Optional[str] = None,
-    token_type: str = "addon"
+    token_type: str = "addon",
+    api_base_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Verify a Clockify JWT token.
-    
-    Args:
-        token: JWT token string
-        expected_addon_key: Expected add-on key (sub claim)
-        expected_workspace_id: Optional expected workspace ID
-        token_type: Expected token type (default: "addon")
-        
-    Returns:
-        Decoded token claims if valid
-        
-    Raises:
-        SecurityError: If token validation fails
-    """
+    """Verify a Clockify JWT token using JWKS with claim enforcement."""
     try:
-        # Decode and verify signature
+        jwks_url = _resolve_jwks_url(api_base_url)
+        client = _get_jwk_client(jwks_url)
+        signing_key = client.get_signing_key_from_jwt(token).key
+
         payload = jwt.decode(
             token,
-            CLOCKIFY_PUBLIC_KEY,
+            signing_key,
             algorithms=["RS256"],
-            options={"verify_exp": True}
+            options={"verify_exp": True, "verify_aud": False},
+            leeway=1,
         )
-        
-        # Verify issuer
+
         if payload.get("iss") != "clockify":
             raise SecurityError("Invalid issuer: expected 'clockify'")
-        
-        # Verify token type
         if payload.get("type") != token_type:
             raise SecurityError(f"Invalid token type: expected '{token_type}'")
-        
-        # Verify subject (addon key)
         if payload.get("sub") != expected_addon_key:
             raise SecurityError(f"Invalid subject: expected '{expected_addon_key}'")
-        
-        # Optionally verify workspace ID
+
         if expected_workspace_id:
             token_workspace = payload.get("workspaceId")
             if token_workspace != expected_workspace_id:
                 raise SecurityError(f"Workspace ID mismatch: expected '{expected_workspace_id}', got '{token_workspace}'")
-        
+
         return payload
-        
+
     except PyJWTError as e:
-        raise SecurityError(f"JWT validation failed: {str(e)}")
+        raise SecurityError(f"JWT validation failed: {str(e)}") from e
 
 
 def verify_webhook_signature(

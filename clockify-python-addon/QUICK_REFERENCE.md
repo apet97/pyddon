@@ -104,6 +104,7 @@ PYTHONPATH=. pytest tests/ --cov=app --cov-report=html
 ✅ **Deduplication** - DB-backed, survives restarts  
 ✅ **No Token Leakage** - Tokens never logged  
 ✅ **Signature Metrics** - `/metrics` exports signature-failure and HMAC fallback counters for alerting
+✅ **JWKS Resolution** - JWKS host auto-resolves via `CLOCKIFY_ENVIRONMENT` or `CLOCKIFY_JWKS_URL`; keep `REQUIRE_SIGNATURE_VERIFICATION=true` outside local dev
 
 ## 🎯 Key Endpoints
 
@@ -184,6 +185,7 @@ lsof -ti:8000 | xargs kill -9
 - [ ] Run `alembic upgrade head`
 - [ ] Run full test suite
 - [ ] Load test rate limiting
+- [ ] Wire `/health`, `/ready`, and `/metrics` probes into your platform monitoring/alerts
 
 **Marketplace Submission:**
 - [ ] Update vendor information in `manifest.json`

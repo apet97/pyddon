@@ -4,6 +4,7 @@
   "name": "Clockify Python Addon Boilerplate",
   "description": "Production-ready Clockify Add-on with full API integration, webhook handling, and no-code API explorer. Built with FastAPI and designed for marketplace deployment.",
   "baseUrl": "http://localhost:8000",
+  "minimalSubscriptionPlan": "ENTERPRISE",
   "vendor": {
     "name": "Your Company",
     "url": "https://your-company.com",

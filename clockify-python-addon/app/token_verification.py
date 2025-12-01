@@ -191,8 +191,8 @@ async def verify_jwt_token_rs256(
 def verify_jwt_token(token: str, expected_workspace_id: Optional[str] = None) -> Dict[str, Any]:
     """Verify JWT token with proper production/dev mode handling."""
     
-    # Developer mode bypass
-    if not settings.require_signature_verification or settings.is_development:
+    # Developer mode bypass (only when explicitly disabled)
+    if not settings.require_signature_verification:
         logger.warning("jwt_verification_disabled_or_dev_mode")
         try:
             payload = jose_jwt.get_unverified_claims(token)
@@ -228,7 +228,7 @@ async def verify_addon_token(
     token = x_addon_token or extract_token_from_header(authorization)
     
     if not token:
-        if settings.is_development:
+        if not settings.require_signature_verification:
             logger.warning("no_token_provided_dev_mode")
             return {"workspaceId": "dev-workspace", "userId": "dev-user"}
         raise AuthenticationError("Missing authentication token")
@@ -237,7 +237,7 @@ async def verify_addon_token(
         payload = verify_jwt_token(token)
         return payload
     except AuthenticationError:
-        if settings.is_development:
+        if not settings.require_signature_verification:
             logger.warning("token_verification_failed_dev_mode")
             return {"workspaceId": "dev-workspace", "userId": "dev-user"}
         raise

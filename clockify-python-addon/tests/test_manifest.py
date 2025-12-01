@@ -79,7 +79,7 @@ def test_doc_samples_match_canonical_event_list():
 
 def test_repo_manifest_spec_covers_all_events():
     """manifest.universal-webhook.json must include every webhook our addon expects."""
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[2]
     spec_path = repo_root / "manifest.universal-webhook.json"
     spec_data = json.loads(spec_path.read_text())
 

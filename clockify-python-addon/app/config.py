@@ -99,7 +99,8 @@ class Settings(BaseSettings):
 
     @property
     def is_development(self) -> bool:
-        return self.debug or not self.require_signature_verification
+        # Keep debug-specific behavior separate from signature enforcement.
+        return self.debug
 
     def get_clockify_jwks_url(self, api_base_url: Optional[str] = None) -> str:
         """Resolve the correct JWKS URL based on environment or overrides."""
